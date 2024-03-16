@@ -2,8 +2,9 @@
 package org.opalj
 package tac
 
-import org.opalj.br.analyses.BasicReport
+import org.opalj.br.{PCAndInstruction}
 import org.opalj.br.analyses.Project
+import org.opalj.br.analyses.BasicReport
 
 /**
  * Prints the 3-address code for all methods of all classes found in the given jar/folder.
@@ -20,8 +21,30 @@ object PrintTAC {
             m <- cf.methods
             if m.body.isDefined
         } {
+            m.body match {
+                case None =>
+                    m.copy() // methods which are native and abstract ...
+
+                case Some(code) =>
+                    // let's search all "toString" calls
+                    //val lCode = LabeledCode(code)
+                    //var modified = false
+                    for {
+                        PCAndInstruction(pc, inst) <- code
+                    } {
+                        println(s"$pc $inst")
+                    }
+            }
+
             val tac = tacProvider(m)
-            println(m.toJava(ToTxt(tac).mkString("\n", "\n", "\n")) + "\n\n")
+            /*for (elem <- tac.stmts) {
+                /*elem match {
+                    case If(pc, l, cond, r, target) => {
+                        // emit bytecode jump...
+                    }*/
+                }
+            }*/
+           println(m.toJava(ToTxt(tac).mkString("\n", "\n", "\n"))+"\n\n")
         }
 
         BasicReport("Done.")

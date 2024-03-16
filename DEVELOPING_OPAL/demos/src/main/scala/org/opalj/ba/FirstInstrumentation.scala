@@ -31,10 +31,11 @@ object FirstInstrumentation extends App {
     val PrintStreamType = ObjectType("java/io/PrintStream")
     val SystemType = ObjectType("java/lang/System")
 
-    val TheType = ObjectType("org/opalj/ba/SimpleInstrumentationDemo")
+    val TheType = ObjectType("org/opalj/ba/testingTAC/HelloWorldToString")
 
     // let's load the class
-    val in = () => this.getClass.getResourceAsStream("SimpleInstrumentationDemo.class")
+    val in = () => this.getClass.getResourceAsStream("/org/opalj/ba/testingTAC/HelloWorldToString.class")
+
     val cf = Java8Framework.ClassFile(in).head // in this case we don't have invokedynamic resolution
     // let's transform the methods
     val newMethods =
@@ -107,8 +108,6 @@ object FirstInstrumentation extends App {
     val cl = new InMemoryClassLoader(Map((TheType.toJava, newRawCF)))
     val newClass = cl.findClass(TheType.toJava)
     val instance = newClass.getDeclaredConstructor().newInstance()
-    newClass.getMethod("callsToString").invoke(instance)
-    newClass.getMethod("returnsValue", classOf[Int]).invoke(instance, Integer.valueOf(0))
-    newClass.getMethod("returnsValue", classOf[Int]).invoke(instance, Integer.valueOf(1))
+    newClass.getMethod("toString").invoke(instance)
 
 }
