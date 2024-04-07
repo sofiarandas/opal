@@ -5,7 +5,7 @@ package tac
 import org.opalj.ba.{InsertionPosition, LabeledCode}
 import org.opalj.br.Method
 import org.opalj.br.analyses.Project
-import org.opalj.br.instructions.{INVOKEVIRTUAL, NOP, RETURN}
+import org.opalj.br.instructions.{GETSTATIC, INVOKEVIRTUAL, LoadString, NOP, RETURN}
 import org.opalj.value.ValueInformation
 
 import java.io.File
@@ -103,28 +103,17 @@ object TACtoBC {
       instructions = ArrayBuffer.fill(tac.stmts.length)(NOP)
     )
     tac.stmts.foreach {
-     /* case ReturnValue(pc, expr) =>
-        expr match {
-          case UVar(_, value) =>
-            value match {
-              case _: IntValue => labeledCode.insert(pc, InsertionPosition.At, Seq(IRETURN)); println("it was an IRETURN :D")
-              case _: LongValue => labeledCode.insert(pc, InsertionPosition.At, Seq(LRETURN))
-              case _: FloatValue => labeledCode.insert(pc, InsertionPosition.At, Seq(FRETURN))
-              case _: DoubleValue => labeledCode.insert(pc, InsertionPosition.At, Seq(DRETURN)); println("it was a DRETURN :D")
-              // Additional cases as necessary, e.g., for object references (ARETURN)
-            }
-        }*/
-      case Assignment(pc, targetVar, expr) =>
-
-      case VirtualMethodCall(pc, declaringClass, isInterface, name, descriptor, receiver, params) =>
+      case Assignment(pc, _, StringConst(_, value)) =>
+        labeledCode.insert(pc, InsertionPosition.Before, Seq(LoadString(value)))
+      case Assignment(pc, _, GetStatic(_, declaringClass, name, declaredFieldType)) =>
+        labeledCode.insert(pc, InsertionPosition.Before, Seq(GETSTATIC(declaringClass, name, declaredFieldType)))
+      case VirtualMethodCall(pc, declaringClass, isInterface, name, descriptor, _, _) =>
         if(isInterface) {
           //labeledCode.insert(pc, InsertionPosition.At, Seq(INVOKEINTERFACE(declaringClass, name, descriptor)))
         } else {
           labeledCode.insert(pc, InsertionPosition.Before, Seq(INVOKEVIRTUAL(declaringClass, name, descriptor)))
-          println("Go Sofiiiii :D")
         }
       case Return(pc) => labeledCode.insert(pc, InsertionPosition.Before, Seq(RETURN))
-      case If(pc, left, condition, right, target) => println("it was an if")
       case _ =>
     }
 
