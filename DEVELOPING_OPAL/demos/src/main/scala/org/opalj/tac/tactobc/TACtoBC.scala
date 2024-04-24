@@ -1,10 +1,12 @@
 /* BSD 2-Clause License - see OPAL/LICENSE for details. */
-package org.opalj
-package tac
+package org.opalj.tac.tactobc
 
+import org.opalj.RelationalOperators.{EQ, GE, GT, LE, LT, NE}
 import org.opalj.br.Method
 import org.opalj.br.analyses.Project
-import org.opalj.br.instructions.{GETSTATIC, INVOKEVIRTUAL, Instruction, LoadString, RETURN}
+import org.opalj.br.instructions.{ATHROW, GETSTATIC, IFEQ, IFGE, IFGT, IFLE, IFLT, IFNE, INVOKEVIRTUAL, Instruction, LoadClass, LoadDouble, LoadFloat, LoadInt, LoadLong, LoadMethodHandle, LoadMethodType, LoadString, NOP, RETURN}
+import org.opalj.bytecode.BytecodeProcessingFailedException
+import org.opalj.tac.{Const, _}
 import org.opalj.value.ValueInformation
 
 import java.io.File
@@ -101,10 +103,9 @@ object TACtoBC {
     var currentPC = 0
 
     tac.stmts.foreach {
-      case Assignment(_, _, StringConst(_, value)) =>
-        val instruction = LoadString(value)
-        instructionsWithPCs += ((currentPC, instruction))
-        currentPC += instruction.length
+      //loading constants
+      case Assignment(_, _, constExpr : Const) =>
+        currentPC = loadConstantAndAdvancePC(constExpr, currentPC, instructionsWithPCs)
       case Assignment(_, _, GetStatic(_, declaringClass, name, declaredFieldType)) =>
         val instruction = GETSTATIC(declaringClass, name, declaredFieldType)
         instructionsWithPCs += ((currentPC, instruction))
@@ -121,9 +122,84 @@ object TACtoBC {
         val instruction = RETURN
         instructionsWithPCs += ((currentPC, instruction))
         currentPC += instruction.length
+      case Nop(_) =>
+        val instruction = NOP
+        instructionsWithPCs += ((currentPC, instruction))
+        currentPC += instruction.length
+      case Throw(_,_) =>
+          //ToDo: fix initialization
+          val instruction = ATHROW
+          instructionsWithPCs += ((currentPC, instruction))
+          //currentPC += instruction.length
+      case If(_, IntConst(_, value), condition, IntConst(_, 0), gotoLabel) =>
+        //
+        // Operators to compare int values.
+        //
+        if(condition == LT) {
+          val instruction = new IFLT(-1)
+          instructionsWithPCs += ((currentPC, instruction))
+          currentPC += instruction.length
+        } else if(condition == GT) {
+          val instruction = new IFGT(-1)
+          instructionsWithPCs += ((currentPC, instruction))
+          currentPC += instruction.length
+        } else if(condition == LE) {
+          val instruction = new IFLE(-1) // -1 as a placeholder
+          instructionsWithPCs += ((currentPC, instruction))
+          currentPC += instruction.length
+        } else if(condition == GE) {
+          val instruction = IFGE(-1)
+          instructionsWithPCs += ((currentPC, instruction))
+          currentPC += instruction.length
+        }
+        //
+        // Operators to compare int and reference values.
+        //
+        else if(condition == EQ) {
+          val instruction = IFEQ(-1)
+          instructionsWithPCs += ((currentPC, instruction))
+          currentPC += instruction.length
+        } else if(condition == NE) {
+          val instruction = IFNE(-1)
+          instructionsWithPCs += ((currentPC, instruction))
+          currentPC += instruction.length
+        }
+        //
+        // Operators to compare floating point numbers.
+        //
+        /*else if(condition == CMPG) {
+          val instruction = IF_ICMPG(-1)
+        }*/
       case _ =>
     }
     instructionsWithPCs
+  }
+
+  // Helper method to load constants and update the program counter.
+  def loadConstantAndAdvancePC[T](constExpr: Const, currentPC: Int, instructionsWithPCs: ArrayBuffer[(Int, Instruction)]): Int = {
+    val instruction = constExpr match {
+      case IntConst(_, value)     => LoadInt(value)
+      case FloatConst(_, value)   => LoadFloat(value)
+      case ClassConst(_, value)   => LoadClass(value)
+      case StringConst(_, value)  => LoadString(value)
+      case MethodHandleConst(_, value) => LoadMethodHandle(value)
+      case MethodTypeConst(_, value) => LoadMethodType(value)
+      case DoubleConst(_, value)  => LoadDouble(value)
+      case LongConst(_, value)    => LoadLong(value)
+      //todo: figure out how and what LoadDynamic is
+      //I think LDCDynamic is not an actual Instruction.
+      /*case Assignment(_, _, DynamicConst(_, bootstrapMethod, name, descriptor)) =>
+        val instruction = LoadDynamic(-1, bootstrapMethod, name, descriptor)
+        instructionsWithPCs += ((currentPC, instruction))
+        currentPC += instruction.length*/
+      case _ =>
+        //todo: check that this is the right exception to throw
+        throw BytecodeProcessingFailedException(
+          "unsupported constant value: " + constExpr
+        )
+    }
+    instructionsWithPCs += ((currentPC, instruction))
+    currentPC + instruction.length // Update and return the new program counter
   }
 
   def main(args: Array[String]): Unit = {
