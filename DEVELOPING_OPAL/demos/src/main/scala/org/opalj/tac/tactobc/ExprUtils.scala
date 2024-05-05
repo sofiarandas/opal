@@ -1,23 +1,22 @@
 package org.opalj.tac.tactobc
 
-import org.opalj.br.instructions.{GETFIELD, GETSTATIC, ILOAD, Instruction, LoadClass, LoadDouble, LoadFloat, LoadInt, LoadLong, LoadMethodHandle, LoadMethodType, LoadString}
+import org.opalj.BinaryArithmeticOperators.{Add, And, Divide, Modulo, Multiply, Or, ShiftLeft, ShiftRight, Subtract, UnsignedShiftRight, XOr}
+import org.opalj.br.{ComputationalTypeDouble, ComputationalTypeFloat, ComputationalTypeInt, ComputationalTypeLong}
+import org.opalj.br.instructions.{DADD, DDIV, DMUL, DREM, DSUB, FADD, FDIV, FMUL, FREM, FSUB, GETFIELD, GETSTATIC, IADD, IAND, IDIV, ILOAD, IMUL, IOR, IREM, ISHL, ISHR, ISUB, IUSHR, IXOR, Instruction, LADD, LDIV, LMUL, LREM, LSUB, LoadClass, LoadDouble, LoadFloat, LoadInt, LoadLong, LoadMethodHandle, LoadMethodType, LoadString}
 import org.opalj.bytecode.BytecodeProcessingFailedException
-import org.opalj.tac.{ClassConst, Const, DoubleConst, Expr, FloatConst, GetField, GetStatic, IntConst, LongConst, MethodHandleConst, MethodTypeConst, StringConst, Var}
+import org.opalj.tac.{BinaryExpr, ClassConst, Const, DoubleConst, Expr, FloatConst, GetField, GetStatic, IntConst, LongConst, MethodHandleConst, MethodTypeConst, StringConst, Var}
 
 import scala.collection.mutable
 import scala.collection.mutable.ArrayBuffer
 
 object ExprUtils {
 
-  // Map for variable indexing within methods
-  private val variableIndexMap: mutable.Map[String, Int] = mutable.Map.empty
-  private var nextAvailableIndex: Int = 0
-
   def processExpression(expr: Expr[_], instructionsWithPCs: ArrayBuffer[(Int, Instruction)], currentPC: Int): Int = {
     expr match {
       case const: Const => loadConstant(const, instructionsWithPCs, currentPC)
       case variable: Var[_] => loadVariable(variable, instructionsWithPCs, currentPC)
       case fieldExpr: Expr[_] if fieldExpr.isInstanceOf[GetField[_]] || fieldExpr.isInstanceOf[GetStatic] => handleFieldAccess(fieldExpr, instructionsWithPCs, currentPC)
+      case binaryExpr: BinaryExpr[_] => handleBinaryExpr(binaryExpr, instructionsWithPCs, currentPC)
       case _ =>
         throw new UnsupportedOperationException("Unsupported expression type" + expr)
     }
@@ -56,6 +55,10 @@ object ExprUtils {
     currentPC + 1 // Update and return the new program counter
   }
 
+  // Map for variable indexing within methods
+  private val variableIndexMap: mutable.Map[String, Int] = mutable.Map.empty
+  private var nextAvailableIndex: Int = 0
+
   private def getVariableIndex(variableName: String): Int = {
     variableIndexMap.getOrElseUpdate(variableName, {
       val newIndex = nextAvailableIndex
@@ -71,6 +74,56 @@ object ExprUtils {
       case getStaticExpr: GetStatic =>
         GETSTATIC(getStaticExpr.declaringClass, getStaticExpr.name, getStaticExpr.declaredFieldType)
       case _ => throw new IllegalArgumentException("Expected a field access expression")
+    }
+    instructionsWithPCs += ((currentPC, instruction))
+    currentPC + instruction.length // Update and return the new program counter
+  }
+
+  private def handleBinaryExpr(binaryExpr: BinaryExpr[_], instructionsWithPCs: ArrayBuffer[(Int, Instruction)], currentPC: Int): Int = {
+    // Assuming the left and right are simple vars or consts
+    //save the PC offset of the left Expr to know where to continue with the right Expr
+    val leftPC = processExpression(binaryExpr.left, instructionsWithPCs, currentPC)
+    //process the right Expr
+    processExpression(binaryExpr.right, instructionsWithPCs, leftPC)
+    val instruction = (binaryExpr.cTpe, binaryExpr.op) match {
+      //Double
+      case (ComputationalTypeDouble, Add) => DADD
+      case (ComputationalTypeDouble, Subtract) => DSUB
+      case (ComputationalTypeDouble, Multiply) => DMUL
+      case (ComputationalTypeDouble, Divide) => DDIV
+      case (ComputationalTypeDouble, Modulo) => DREM
+      //Float
+      case (ComputationalTypeFloat, Add) => FADD
+      case (ComputationalTypeFloat, Subtract) => FSUB
+      case (ComputationalTypeFloat, Multiply) => FMUL
+      case (ComputationalTypeFloat, Divide) => FDIV
+      case (ComputationalTypeFloat, Modulo) => FREM
+      //Int
+      case (ComputationalTypeInt, Add) => IADD
+      case (ComputationalTypeInt, Subtract) => ISUB
+      case (ComputationalTypeInt, Multiply) => IMUL
+      case (ComputationalTypeInt, Divide) => IDIV
+      case (ComputationalTypeInt, Modulo) => IREM
+      case (ComputationalTypeInt, And) => IAND
+      case (ComputationalTypeInt, Or) => IOR
+      case (ComputationalTypeInt, ShiftLeft) => ISHL
+      case (ComputationalTypeInt, ShiftRight) => ISHR
+      case (ComputationalTypeInt, UnsignedShiftRight) => IUSHR
+      case (ComputationalTypeInt, XOr) => IXOR
+      //Long
+      case (ComputationalTypeLong, Add) => LADD
+      case (ComputationalTypeLong, Subtract) => LSUB
+      case (ComputationalTypeLong, Multiply) => LMUL
+      case (ComputationalTypeLong, Divide) => LDIV
+      case (ComputationalTypeLong, Modulo) => LREM
+      case (ComputationalTypeLong, And) => IAND
+      case (ComputationalTypeLong, Or) => IOR
+      case (ComputationalTypeLong, ShiftLeft) => ISHL
+      case (ComputationalTypeLong, ShiftRight) => ISHR
+      case (ComputationalTypeLong, UnsignedShiftRight) => IUSHR
+      case (ComputationalTypeLong, XOr) => IXOR
+      //Unsupported
+      case _ => throw new UnsupportedOperationException("Unsupported operation or computational type in BinaryExpr")
     }
     instructionsWithPCs += ((currentPC, instruction))
     currentPC + instruction.length // Update and return the new program counter

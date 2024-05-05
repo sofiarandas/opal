@@ -103,7 +103,6 @@ object TACtoBC {
 
     tac.stmts.foreach {
       //Best practice will be to have only 1 case per Stmt
-      //loading constants
       case Assignment(_, targetVar, expr) =>
         currentPC = AssignmentUtils.processAssignment(targetVar, expr, instructionsWithPCs, currentPC)
       //Register allocator für variables
