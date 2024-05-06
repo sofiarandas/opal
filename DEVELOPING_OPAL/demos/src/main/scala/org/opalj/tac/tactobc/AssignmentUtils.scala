@@ -13,5 +13,7 @@ object AssignmentUtils {
     ExprUtils.processExpression(expr, instructionsWithPCs, currentPC)
     //LHS
     //ToDo: create some logic to handle the targetVar
+    ExprUtils.processExpression(targetVar, instructionsWithPCs, currentPC)
+    ExprUtils.storeVariable(targetVar, instructionsWithPCs, currentPC)
   }
 }
