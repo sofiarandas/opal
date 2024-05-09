@@ -10,10 +10,10 @@ object StmtProcessor {
 
   //Assignment
   def processAssignment(targetVar: Var[_], expr: Expr[_], instructionsWithPCs: ArrayBuffer[(Int, Instruction)], currentPC: Int): Int = {
+    //Processing RHS
     val afterExprPC = ExprUtils.processExpression(expr, instructionsWithPCs, currentPC)
-
+    //Processing LHS
     val finalPC = ExprUtils.storeVariable(targetVar, instructionsWithPCs, afterExprPC)
-
     finalPC
   }
 

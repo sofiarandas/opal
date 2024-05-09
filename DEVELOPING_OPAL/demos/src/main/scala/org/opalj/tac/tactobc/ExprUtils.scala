@@ -2,7 +2,7 @@ package org.opalj.tac.tactobc
 
 import org.opalj.BinaryArithmeticOperators.{Add, And, Divide, Modulo, Multiply, Or, ShiftLeft, ShiftRight, Subtract, UnsignedShiftRight, XOr}
 import org.opalj.br.{ComputationalTypeDouble, ComputationalTypeFloat, ComputationalTypeInt, ComputationalTypeLong, ComputationalTypeReference}
-import org.opalj.br.instructions.{ALOAD, ALOAD_0, ALOAD_1, ALOAD_2, ALOAD_3, ASTORE, ASTORE_0, ASTORE_1, ASTORE_2, ASTORE_3, BIPUSH, DADD, DDIV, DLOAD, DLOAD_0, DLOAD_1, DLOAD_2, DLOAD_3, DMUL, DREM, DSTORE, DSTORE_0, DSTORE_1, DSTORE_2, DSTORE_3, DSUB, FADD, FDIV, FLOAD, FLOAD_0, FLOAD_1, FLOAD_2, FLOAD_3, FMUL, FREM, FSTORE, FSTORE_0, FSTORE_1, FSTORE_2, FSTORE_3, FSUB, GETFIELD, GETSTATIC, IADD, IAND, ICONST_0, ICONST_1, ICONST_2, ICONST_3, ICONST_4, ICONST_5, ICONST_M1, IDIV, ILOAD, ILOAD_0, ILOAD_1, ILOAD_2, ILOAD_3, IMUL, IOR, IREM, ISHL, ISHR, ISTORE, ISTORE_0, ISTORE_1, ISTORE_2, ISTORE_3, ISUB, IUSHR, IXOR, Instruction, LADD, LDIV, LLOAD, LLOAD_0, LLOAD_1, LLOAD_2, LLOAD_3, LMUL, LREM, LSTORE, LSTORE_0, LSTORE_1, LSTORE_2, LSTORE_3, LSUB, LoadClass, LoadDouble, LoadFloat, LoadInt, LoadLong, LoadMethodHandle, LoadMethodType, LoadString, SIPUSH}
+import org.opalj.br.instructions.{ALOAD, ALOAD_0, ALOAD_1, ALOAD_2, ALOAD_3, ASTORE, ASTORE_0, ASTORE_1, ASTORE_2, ASTORE_3, BIPUSH, DADD, DCONST_0, DCONST_1, DDIV, DLOAD, DLOAD_0, DLOAD_1, DLOAD_2, DLOAD_3, DMUL, DREM, DSTORE, DSTORE_0, DSTORE_1, DSTORE_2, DSTORE_3, DSUB, FADD, FCONST_0, FCONST_1, FCONST_2, FDIV, FLOAD, FLOAD_0, FLOAD_1, FLOAD_2, FLOAD_3, FMUL, FREM, FSTORE, FSTORE_0, FSTORE_1, FSTORE_2, FSTORE_3, FSUB, GETFIELD, GETSTATIC, IADD, IAND, ICONST_0, ICONST_1, ICONST_2, ICONST_3, ICONST_4, ICONST_5, ICONST_M1, IDIV, ILOAD, ILOAD_0, ILOAD_1, ILOAD_2, ILOAD_3, IMUL, IOR, IREM, ISHL, ISHR, ISTORE, ISTORE_0, ISTORE_1, ISTORE_2, ISTORE_3, ISUB, IUSHR, IXOR, Instruction, LADD, LCONST_0, LCONST_1, LDIV, LLOAD, LLOAD_0, LLOAD_1, LLOAD_2, LLOAD_3, LMUL, LREM, LSTORE, LSTORE_0, LSTORE_1, LSTORE_2, LSTORE_3, LSUB, LoadClass, LoadDouble, LoadFloat, LoadInt, LoadLong, LoadMethodHandle, LoadMethodType, LoadString, SIPUSH}
 import org.opalj.bytecode.BytecodeProcessingFailedException
 import org.opalj.tac.{BinaryExpr, ClassConst, Const, DoubleConst, Expr, FloatConst, GetField, GetStatic, IntConst, LongConst, MethodHandleConst, MethodTypeConst, StringConst, Var}
 
@@ -36,13 +36,26 @@ object ExprUtils {
         case _ if value >= Short.MinValue && value <= Short.MaxValue => SIPUSH(value)
         case _ => LoadInt(value)
       }
-      case FloatConst(_, value) => LoadFloat(value)
+      case FloatConst(_, value) => value match {
+        case 0 => FCONST_0
+        case 1 => FCONST_1
+        case 2 => FCONST_2
+        case _ => LoadFloat(value)
+      }
       case ClassConst(_, value) => LoadClass(value)
       case StringConst(_, value) => LoadString(value)
       case MethodHandleConst(_, value) => LoadMethodHandle(value)
       case MethodTypeConst(_, value) => LoadMethodType(value)
-      case DoubleConst(_, value) => LoadDouble(value)
-      case LongConst(_, value) => LoadLong(value)
+      case DoubleConst(_, value) => value match {
+        case 0 => DCONST_0
+        case 1 => DCONST_1
+        case _ => LoadDouble(value)
+      }
+      case LongConst(_, value) => value match {
+        case 0 => LCONST_0
+        case 1 => LCONST_1
+        case _ => LoadLong(value)
+      }
       //todo: figure out how and what LoadDynamic is
       //I think LDCDynamic is not an actual Instruction.
       /*case Assignment(_, _, DynamicConst(_, bootstrapMethod, name, descriptor)) =>
@@ -61,7 +74,7 @@ object ExprUtils {
 
   // Map for variable indexing within methods
   private val variableIndexMap: mutable.Map[String, Int] = mutable.Map.empty
-  private var nextAvailableIndex: Int = 0
+  private var nextAvailableIndex: Int = 1
 
   private def getVariableIndex(variableName: String): Int = {
     variableIndexMap.getOrElseUpdate(variableName, {
@@ -72,7 +85,7 @@ object ExprUtils {
   }
 
   private def loadVariable(variable: Var[_], instructionsWithPCs: ArrayBuffer[(Int, Instruction)], currentPC: Int): Int = {
-    val index = getVariableIndex(variable.name)
+    val index = getVariableIndex(variable.name.drop(1).dropRight(1))
     val instruction = variable.cTpe match {
       case ComputationalTypeInt => index match {
         case 0 => ILOAD_0

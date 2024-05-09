@@ -4,7 +4,7 @@ package org.opalj.tac.tactobc
 import org.opalj.RelationalOperators.{EQ, GE, GT, LE, LT, NE}
 import org.opalj.br.Method
 import org.opalj.br.analyses.Project
-import org.opalj.br.instructions.{ATHROW, IFEQ, IFGE, IFGT, IFLE, IFLT, IFNE, INVOKEVIRTUAL, Instruction, NOP, RETURN}
+import org.opalj.br.instructions.{ATHROW, IFEQ, IFGE, IFGT, IFLE, IFLT, IFNE, INVOKEVIRTUAL, Instruction, RETURN}
 import org.opalj.tac._
 import org.opalj.value.ValueInformation
 
@@ -107,6 +107,8 @@ object TACtoBC {
         //Todo refactor to val instruction = process....
         //process...() has to return an instruction
         currentPC = StmtProcessor.processAssignment(targetVar, expr, instructionsWithPCs, currentPC)
+      case ExprStmt(_, expr) =>
+        currentPC = ExprUtils.processExpression(expr, instructionsWithPCs, currentPC)
       //Register allocator für variables
       //liste von variablen die existieren
       //Todo: figure out how BC intructions can be categorized -> kind of done that
@@ -122,10 +124,6 @@ object TACtoBC {
         }
       case Return(_) =>
         val instruction = RETURN
-        instructionsWithPCs += ((currentPC, instruction))
-        currentPC += instruction.length
-      case Nop(_) =>
-        val instruction = NOP
         instructionsWithPCs += ((currentPC, instruction))
         currentPC += instruction.length
       case Throw(_,_) =>
