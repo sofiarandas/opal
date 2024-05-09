@@ -162,6 +162,7 @@ object ExprUtils {
         case 3 => LSTORE_3
         case _ => LSTORE(index)
       }
+      //todo: find out if I should handle this cases
       case ComputationalTypeReference => index match {
         case 0 => ASTORE_0
         case 1 => ASTORE_1
