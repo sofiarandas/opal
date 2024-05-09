@@ -9,11 +9,13 @@ import scala.collection.mutable.ArrayBuffer
 object AssignmentUtils {
 
   def processAssignment(targetVar: Var[_], expr: Expr[_], instructionsWithPCs: ArrayBuffer[(Int, Instruction)], currentPC: Int): Int = {
-    //RHS
-    ExprUtils.processExpression(expr, instructionsWithPCs, currentPC)
-    //LHS
-    //ToDo: create some logic to handle the targetVar
-    ExprUtils.processExpression(targetVar, instructionsWithPCs, currentPC)
-    ExprUtils.storeVariable(targetVar, instructionsWithPCs, currentPC)
+    // Evaluate the RHS and update the PC accordingly
+    val afterExprPC = ExprUtils.processExpression(expr, instructionsWithPCs, currentPC)
+
+    // Store the result into the target variable and update the PC
+    val finalPC = ExprUtils.storeVariable(targetVar, instructionsWithPCs, afterExprPC)
+
+    // Return the updated PC
+    finalPC
   }
 }

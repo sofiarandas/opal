@@ -2,7 +2,7 @@ package org.opalj.tac.tactobc
 
 import org.opalj.BinaryArithmeticOperators.{Add, And, Divide, Modulo, Multiply, Or, ShiftLeft, ShiftRight, Subtract, UnsignedShiftRight, XOr}
 import org.opalj.br.{ComputationalTypeDouble, ComputationalTypeFloat, ComputationalTypeInt, ComputationalTypeLong, ComputationalTypeReference}
-import org.opalj.br.instructions.{ALOAD, ASTORE, DADD, DDIV, DLOAD, DMUL, DREM, DSTORE, DSUB, FADD, FDIV, FLOAD, FMUL, FREM, FSTORE, FSUB, GETFIELD, GETSTATIC, IADD, IAND, IDIV, ILOAD, IMUL, IOR, IREM, ISHL, ISHR, ISTORE, ISUB, IUSHR, IXOR, Instruction, LADD, LDIV, LLOAD, LMUL, LREM, LSTORE, LSUB, LoadClass, LoadDouble, LoadFloat, LoadInt, LoadLong, LoadMethodHandle, LoadMethodType, LoadString}
+import org.opalj.br.instructions.{ALOAD, ASTORE, BIPUSH, DADD, DDIV, DLOAD, DMUL, DREM, DSTORE, DSUB, FADD, FDIV, FLOAD, FMUL, FREM, FSTORE, FSUB, GETFIELD, GETSTATIC, IADD, IAND, ICONST_0, ICONST_1, ICONST_2, ICONST_3, ICONST_4, ICONST_5, ICONST_M1, IDIV, ILOAD, IMUL, IOR, IREM, ISHL, ISHR, ISTORE, ISUB, IUSHR, IXOR, Instruction, LADD, LDIV, LLOAD, LMUL, LREM, LSTORE, LSUB, LoadClass, LoadDouble, LoadFloat, LoadInt, LoadLong, LoadMethodHandle, LoadMethodType, LoadString, SIPUSH}
 import org.opalj.bytecode.BytecodeProcessingFailedException
 import org.opalj.tac.{BinaryExpr, ClassConst, Const, DoubleConst, Expr, FloatConst, GetField, GetStatic, IntConst, LongConst, MethodHandleConst, MethodTypeConst, StringConst, Var}
 
@@ -25,7 +25,18 @@ object ExprUtils {
 
   private def loadConstant(constExpr: Const, instructionsWithPCs: ArrayBuffer[(Int, Instruction)], currentPC: Int): Int = {
     val instruction = constExpr match {
-      case IntConst(_, value) => LoadInt(value)
+      case IntConst(_, value) => value match {
+        case -1 => ICONST_M1
+        case 0 => ICONST_0
+        case 1 => ICONST_1
+        case 2 => ICONST_2
+        case 3 => ICONST_3
+        case 4 => ICONST_4
+        case 5 => ICONST_5
+        case _ if value >= Byte.MinValue && value <= Byte.MaxValue => BIPUSH(value)
+        case _ if value >= Short.MinValue && value <= Short.MaxValue => SIPUSH(value)
+        case _ => LoadInt(value)
+      }
       case FloatConst(_, value) => LoadFloat(value)
       case ClassConst(_, value) => LoadClass(value)
       case StringConst(_, value) => LoadString(value)
@@ -84,6 +95,7 @@ object ExprUtils {
       case ComputationalTypeDouble => DSTORE(index)
       case ComputationalTypeLong => LSTORE(index)
       case ComputationalTypeReference => ASTORE(index)
+      //todo: handle AASTORE
       case _ => throw new UnsupportedOperationException("Unsupported computational type for storing variable" + variable)
     }
     instructionsWithPCs += ((currentPC, storeInstruction))
