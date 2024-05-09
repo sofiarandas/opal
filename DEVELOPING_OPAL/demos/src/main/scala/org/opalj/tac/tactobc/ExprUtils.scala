@@ -193,7 +193,7 @@ object ExprUtils {
     //save the PC offset of the left Expr to know where to continue with the right Expr
     val leftPC = processExpression(binaryExpr.left, instructionsWithPCs, currentPC)
     //process the right Expr
-    processExpression(binaryExpr.right, instructionsWithPCs, leftPC)
+    val rightPC = processExpression(binaryExpr.right, instructionsWithPCs, leftPC)
     val instruction = (binaryExpr.cTpe, binaryExpr.op) match {
       //Double
       case (ComputationalTypeDouble, Add) => DADD
@@ -235,7 +235,8 @@ object ExprUtils {
       //Unsupported
       case _ => throw new UnsupportedOperationException("Unsupported operation or computational type in BinaryExpr" + binaryExpr)
     }
-    instructionsWithPCs += ((currentPC, instruction))
-    currentPC + instruction.length // Update and return the new program counter
+    val offsetPC = currentPC + (rightPC - currentPC)
+    instructionsWithPCs += ((offsetPC, instruction))
+    offsetPC + instruction.length // Update and return the new program counter
   }
 }
