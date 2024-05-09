@@ -104,13 +104,12 @@ object TACtoBC {
     tac.stmts.foreach {
       //Best practice will be to have only 1 case per Stmt
       case Assignment(_, targetVar, expr) =>
-        currentPC = AssignmentUtils.processAssignment(targetVar, expr, instructionsWithPCs, currentPC)
+        //Todo refactor to val instruction = process....
+        //process...() has to return an instruction
+        currentPC = StmtProcessor.processAssignment(targetVar, expr, instructionsWithPCs, currentPC)
       //Register allocator für variables
       //liste von variablen die existieren
-      //map von local variables zu indexes
-      //visitor design pattern -> code generation
-      //Todo: figure out how BC intructions can be categorized ->
-      //figure out if following sentecne is correct: there are only constants and local variables.
+      //Todo: figure out how BC intructions can be categorized -> kind of done that
       //todo figure out if the tacai is really 1 to 1 to be reverse engineered
       //Todo do tests :D
       case VirtualMethodCall(_, declaringClass, isInterface, name, descriptor, _, _) =>
@@ -134,6 +133,9 @@ object TACtoBC {
         val instruction = ATHROW
         instructionsWithPCs += ((currentPC, instruction))
       //currentPC += instruction.length
+      //Todo: relationship between created instruction and input TAC
+      //some kind of hashmap to know where to go next
+      //look for TAC method to get the TAC stmt in the given PC
       case If(_, left, condition, right, gotoLabel) =>
         //helper method write variable in the stack -> load it
         //helper method const or local variable
