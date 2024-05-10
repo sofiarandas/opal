@@ -191,10 +191,9 @@ object ExprUtils {
   }
 
   private def handleBinaryExpr(binaryExpr: BinaryExpr[_], instructionsWithPCs: ArrayBuffer[(Int, Instruction)], currentPC: Int): Int = {
-    // Assuming the left and right are simple vars or consts
-    //save the PC offset of the left Expr to know where to continue with the right Expr
+    // process the left expr and save the pc to give in the right expr processing
     val leftPC = processExpression(binaryExpr.left, instructionsWithPCs, currentPC)
-    //process the right Expr
+    // process the right Expr
     val rightPC = processExpression(binaryExpr.right, instructionsWithPCs, leftPC)
     val instruction = (binaryExpr.cTpe, binaryExpr.op) match {
       //Double
@@ -239,6 +238,6 @@ object ExprUtils {
     }
     val offsetPC = currentPC + (rightPC - currentPC)
     instructionsWithPCs += ((offsetPC, instruction))
-    offsetPC + instruction.length // Update and return the new program counter
+    offsetPC + instruction.length
   }
 }
