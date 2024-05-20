@@ -1,10 +1,9 @@
 /* BSD 2-Clause License - see OPAL/LICENSE for details. */
 package org.opalj.tac.tactobc
 
-import org.opalj.RelationalOperators.{EQ, GE, GT, LE, LT, NE}
 import org.opalj.br.Method
 import org.opalj.br.analyses.Project
-import org.opalj.br.instructions.{ATHROW, IFEQ, IFGE, IFGT, IFLE, IFLT, IFNE, INVOKEVIRTUAL, Instruction, RETURN}
+import org.opalj.br.instructions.{ATHROW, INVOKEVIRTUAL, Instruction, RETURN}
 import org.opalj.tac._
 import org.opalj.value.ValueInformation
 
@@ -101,7 +100,7 @@ object TACtoBC {
   def translateSingleTACtoBC(tac: AITACode[TACMethodParameter, ValueInformation]): ArrayBuffer[(Int, Instruction)] = {
     val instructionsWithPCs = ArrayBuffer[(Int, Instruction)]()
     var currentPC = 0
-    val tacToBytecodePCMap: mutable.Map[Stmt[_], Int] = mutable.Map.empty
+    val tacToBytecodePCMap: mutable.Map[, Int] = mutable.Map.empty
     tac.stmts.foreach {
       case Assignment(pc, targetVar, expr) =>
         tacToBytecodePCMap += (Assignment(pc,targetVar, expr), currentPC)
