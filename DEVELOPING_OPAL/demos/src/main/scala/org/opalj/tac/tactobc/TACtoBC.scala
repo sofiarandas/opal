@@ -100,16 +100,16 @@ object TACtoBC {
   def translateSingleTACtoBC(tac: AITACode[TACMethodParameter, ValueInformation]): ArrayBuffer[(Int, Instruction)] = {
     val instructionsWithPCs = ArrayBuffer[(Int, Instruction)]()
     var currentPC = 0
-    val tacToBytecodePCMap: mutable.Map[, Int] = mutable.Map.empty
+    val tacToBytecodePCMap: mutable.Map[(Int, Int), Int] = mutable.Map.empty
     tac.stmts.foreach {
       case Assignment(pc, targetVar, expr) =>
-        tacToBytecodePCMap += (Assignment(pc,targetVar, expr), currentPC)
+        tacToBytecodePCMap += (((pc, 0), currentPC))
         currentPC = StmtProcessor.processAssignment(targetVar, expr, instructionsWithPCs, currentPC)
       case ExprStmt(pc, expr) =>
-        tacToBytecodePCMap += (ExprStmt(pc, expr), currentPC)
+        tacToBytecodePCMap += (((pc, 0), currentPC))
         currentPC = ExprUtils.processExpression(expr, instructionsWithPCs, currentPC)
       case If(pc, left, condition, right, gotoLabel) =>
-        tacToBytecodePCMap += (If(pc, left, condition, right, gotoLabel), currentPC)
+        tacToBytecodePCMap += (((pc, gotoLabel), currentPC))
         currentPC = StmtProcessor.processIf(left, condition, right, gotoLabel, instructionsWithPCs, currentPC)
       //Register allocator für variables
       //liste von variablen die existieren

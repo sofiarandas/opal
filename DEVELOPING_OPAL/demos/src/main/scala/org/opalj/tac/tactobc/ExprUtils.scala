@@ -5,7 +5,8 @@ import org.opalj.BinaryArithmeticOperators.{Add, And, Divide, Modulo, Multiply, 
 import org.opalj.br.{ComputationalTypeDouble, ComputationalTypeFloat, ComputationalTypeInt, ComputationalTypeLong, ComputationalTypeReference}
 import org.opalj.br.instructions.{ALOAD, ALOAD_0, ALOAD_1, ALOAD_2, ALOAD_3, ASTORE, ASTORE_0, ASTORE_1, ASTORE_2, ASTORE_3, BIPUSH, DADD, DCONST_0, DCONST_1, DDIV, DLOAD, DLOAD_0, DLOAD_1, DLOAD_2, DLOAD_3, DMUL, DREM, DSTORE, DSTORE_0, DSTORE_1, DSTORE_2, DSTORE_3, DSUB, FADD, FCONST_0, FCONST_1, FCONST_2, FDIV, FLOAD, FLOAD_0, FLOAD_1, FLOAD_2, FLOAD_3, FMUL, FREM, FSTORE, FSTORE_0, FSTORE_1, FSTORE_2, FSTORE_3, FSUB, GETFIELD, GETSTATIC, IADD, IAND, ICONST_0, ICONST_1, ICONST_2, ICONST_3, ICONST_4, ICONST_5, ICONST_M1, IDIV, ILOAD, ILOAD_0, ILOAD_1, ILOAD_2, ILOAD_3, IMUL, IOR, IREM, ISHL, ISHR, ISTORE, ISTORE_0, ISTORE_1, ISTORE_2, ISTORE_3, ISUB, IUSHR, IXOR, Instruction, LADD, LCONST_0, LCONST_1, LDIV, LLOAD, LLOAD_0, LLOAD_1, LLOAD_2, LLOAD_3, LMUL, LREM, LSTORE, LSTORE_0, LSTORE_1, LSTORE_2, LSTORE_3, LSUB, LoadClass, LoadDouble, LoadFloat, LoadInt, LoadLong, LoadMethodHandle, LoadMethodType, LoadString, SIPUSH}
 import org.opalj.bytecode.BytecodeProcessingFailedException
-import org.opalj.tac.{BinaryExpr, ClassConst, Const, DoubleConst, Expr, FloatConst, GetField, GetStatic, IntConst, LongConst, MethodHandleConst, MethodTypeConst, StringConst, Var}
+import org.opalj.tac.{BinaryExpr, ClassConst, Const, DoubleConst, Expr, FloatConst, GetField, GetStatic, IntConst, LongConst, MethodHandleConst, MethodTypeConst, StringConst, UVar, Var}
+import org.opalj.value.ValueInformation
 
 import scala.collection.mutable
 import scala.collection.mutable.ArrayBuffer
@@ -15,7 +16,10 @@ object ExprUtils {
   def processExpression(expr: Expr[_], instructionsWithPCs: ArrayBuffer[(Int, Instruction)], currentPC: Int): Int = {
     expr match {
       case const: Const => loadConstant(const, instructionsWithPCs, currentPC)
-      case variable: Var[_] => loadVariable(variable, instructionsWithPCs, currentPC)
+      case variable: Var[_] => variable match {
+        case uVar: UVar[_] => handleUVar(uVar, instructionsWithPCs, currentPC)
+        case _ => loadVariable(variable, instructionsWithPCs, currentPC)
+      }
       case fieldExpr: Expr[_] if fieldExpr.isInstanceOf[GetField[_]] || fieldExpr.isInstanceOf[GetStatic] => handleFieldAccess(fieldExpr, instructionsWithPCs, currentPC)
       case binaryExpr: BinaryExpr[_] => handleBinaryExpr(binaryExpr, instructionsWithPCs, currentPC)
       case _ =>
@@ -84,6 +88,43 @@ object ExprUtils {
       newIndex
     })
   }
+
+  private def handleUVar(uvar: UVar[_], instructionsWithPCs: ArrayBuffer[(Int, Instruction)], currentPC: Int): Int = {
+    // Handle UVar with a specific range of values
+    val duVar = uvar.asVar
+    val value = duVar.value
+    value.asInstanceOf[ValueInformation]
+    val (lowerBound, upperBound) = value match {
+      case range: IntegerRange =>
+        (range.lowerBound, range.upperBound)
+      case _: SingleValue[_] =>
+        val singleValue = value.asInstanceOf[SingleValue[_]]
+        (singleValue.value, singleValue.value)
+      case _ =>
+        throw new UnsupportedOperationException("Unsupported UVar value type: " + uvar.value)
+    }
+
+    // Utilize defSites information for more accurate bytecode generation
+    val defSites = uvar.defSites
+    defSites.foreach { defSite =>
+      // Handle each definition site as needed
+      // Example: Generate different bytecode based on defSite
+    }
+
+    // Generate appropriate bytecode for the range
+    val index = getVariableIndex(uvar.name.drop(1).dropRight(1))
+    val instruction = (lowerBound, upperBound) match {
+      case (0, 5) =>
+        // Handle the specific range 0 to 5 as an example
+        ILOAD(index)
+      case _ =>
+        // Default handling for UVar
+        ILOAD(index)
+    }
+    instructionsWithPCs += ((currentPC, instruction))
+    currentPC + (if (index < 4) 1 else 2)
+  }
+
 
   private def loadVariable(variable: Var[_], instructionsWithPCs: ArrayBuffer[(Int, Instruction)], currentPC: Int): Int = {
     val index = getVariableIndex(variable.name.drop(1).dropRight(1))

@@ -4,8 +4,7 @@ package org.opalj.tac.tactobc
 import org.opalj.RelationalOperator
 import org.opalj.RelationalOperators.{EQ, GE, GT, LE, LT, NE}
 import org.opalj.br.instructions.{IFEQ, IFGE, IFGT, IFLE, IFLT, IFNE, IFNONNULL, IFNULL, IF_ACMPEQ, IF_ACMPNE, IF_ICMPEQ, IF_ICMPGE, IF_ICMPGT, IF_ICMPLE, IF_ICMPLT, IF_ICMPNE, Instruction}
-import org.opalj.constraints.NullValue
-import org.opalj.tac.{Expr, IntConst, NullExpr, Var}
+import org.opalj.tac.{Expr, IntConst, Var}
 
 import scala.collection.mutable.ArrayBuffer
 
@@ -61,7 +60,7 @@ object StmtProcessor {
           case GT => IF_ICMPGT(-1)
           case GE => IF_ICMPGE(-1)
         }
-      case right.isNullExpr || left.isNullExpr =>
+      case _ if right.isNullExpr || left.isNullExpr =>
         condition match {
           case EQ => IFNULL(-1)
           case NE => IFNONNULL(-1)
@@ -70,6 +69,8 @@ object StmtProcessor {
         condition match {
           case EQ => IF_ACMPEQ(-1)
           case NE => IF_ACMPNE(-1)
+          //Unsupported
+          case _ => throw new UnsupportedOperationException("Unsupported operation or computational type, condition = " + condition + "left = " + left + "right = " + right)
         }
       }
     val offsetPC = currentPC + (rightPC - currentPC)
