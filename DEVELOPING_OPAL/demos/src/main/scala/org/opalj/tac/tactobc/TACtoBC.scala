@@ -9,6 +9,7 @@ import org.opalj.tac._
 import org.opalj.value.ValueInformation
 
 import java.io.File
+import scala.collection.mutable
 import scala.collection.mutable.ArrayBuffer
 
 object TACtoBC {
@@ -100,19 +101,19 @@ object TACtoBC {
   def translateSingleTACtoBC(tac: AITACode[TACMethodParameter, ValueInformation]): ArrayBuffer[(Int, Instruction)] = {
     val instructionsWithPCs = ArrayBuffer[(Int, Instruction)]()
     var currentPC = 0
-
+    val tacToBytecodePCMap: mutable.Map[Stmt[_], Int] = mutable.Map.empty
     tac.stmts.foreach {
-      //Best practice will be to have only 1 case per Stmt
-      case Assignment(_, targetVar, expr) =>
-        //Todo refactor to val instruction = process....
-        //process...() has to return an instruction
+      case Assignment(pc, targetVar, expr) =>
+        tacToBytecodePCMap += (Assignment(pc,targetVar, expr), currentPC)
         currentPC = StmtProcessor.processAssignment(targetVar, expr, instructionsWithPCs, currentPC)
-      case ExprStmt(_, expr) =>
+      case ExprStmt(pc, expr) =>
+        tacToBytecodePCMap += (ExprStmt(pc, expr), currentPC)
         currentPC = ExprUtils.processExpression(expr, instructionsWithPCs, currentPC)
+      case If(pc, left, condition, right, gotoLabel) =>
+        tacToBytecodePCMap += (If(pc, left, condition, right, gotoLabel), currentPC)
+        currentPC = StmtProcessor.processIf(left, condition, right, gotoLabel, instructionsWithPCs, currentPC)
       //Register allocator für variables
       //liste von variablen die existieren
-      //Todo: figure out how BC intructions can be categorized -> kind of done that
-      //todo figure out if the tacai is really 1 to 1 to be reverse engineered
       //Todo do tests :D
       case VirtualMethodCall(_, declaringClass, isInterface, name, descriptor, _, _) =>
         if(isInterface) {
@@ -131,50 +132,6 @@ object TACtoBC {
         val instruction = ATHROW
         instructionsWithPCs += ((currentPC, instruction))
       //currentPC += instruction.length
-      //Todo: relationship between created instruction and input TAC
-      //some kind of hashmap to know where to go next
-      //look for TAC method to get the TAC stmt in the given PC
-      case If(_, left, condition, right, gotoLabel) =>
-        //helper method write variable in the stack -> load it
-        //helper method const or local variable
-        //
-        // Operators to compare int values.
-        //
-        if(condition == LT) {
-          val instruction = new IFLT(-1)
-          instructionsWithPCs += ((currentPC, instruction))
-          currentPC += instruction.length
-        } else if(condition == GT) {
-          val instruction = new IFGT(-1)
-          instructionsWithPCs += ((currentPC, instruction))
-          currentPC += instruction.length
-        } else if(condition == LE) {
-          val instruction = new IFLE(-1) // -1 as a placeholder
-          instructionsWithPCs += ((currentPC, instruction))
-          currentPC += instruction.length
-        } else if(condition == GE) {
-          val instruction = IFGE(-1)
-          instructionsWithPCs += ((currentPC, instruction))
-          currentPC += instruction.length
-        }
-        //
-        // Operators to compare int and reference values.
-        //
-        else if(condition == EQ) {
-          val instruction = IFEQ(-1)
-          instructionsWithPCs += ((currentPC, instruction))
-          currentPC += instruction.length
-        } else if(condition == NE) {
-          val instruction = IFNE(-1)
-          instructionsWithPCs += ((currentPC, instruction))
-          currentPC += instruction.length
-        }
-      //
-      // Operators to compare floating point numbers.
-      //
-      /*else if(condition == CMPG) {
-        val instruction = IF_ICMPG(-1)
-      }*/
       case _ =>
     }
     instructionsWithPCs
