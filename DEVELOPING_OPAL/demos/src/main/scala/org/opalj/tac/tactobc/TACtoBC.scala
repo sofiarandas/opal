@@ -100,38 +100,43 @@ object TACtoBC {
   def translateSingleTACtoBC(tac: AITACode[TACMethodParameter, ValueInformation]): ArrayBuffer[(Int, Instruction)] = {
     val instructionsWithPCs = ArrayBuffer[(Int, Instruction)]()
     var currentPC = 0
-    val tacToBytecodePCMap: mutable.Map[(Int, Int), Int] = mutable.Map.empty
-    tac.stmts.foreach {
-      case Assignment(pc, targetVar, expr) =>
-        tacToBytecodePCMap += (((pc, 0), currentPC))
-        currentPC = StmtProcessor.processAssignment(targetVar, expr, instructionsWithPCs, currentPC)
-      case ExprStmt(pc, expr) =>
-        tacToBytecodePCMap += (((pc, 0), currentPC))
-        currentPC = ExprUtils.processExpression(expr, instructionsWithPCs, currentPC)
-      case If(pc, left, condition, right, gotoLabel) =>
-        tacToBytecodePCMap += (((pc, gotoLabel), currentPC))
-        currentPC = StmtProcessor.processIf(left, condition, right, gotoLabel, instructionsWithPCs, currentPC)
-      //Register allocator für variables
-      //liste von variablen die existieren
-      //Todo do tests :D
-      case VirtualMethodCall(_, declaringClass, isInterface, name, descriptor, _, _) =>
-        if(isInterface) {
-          //labeledCode.insert(pc, InsertionPosition.At, Seq(INVOKEINTERFACE(declaringClass, name, descriptor)))
-        } else {
-          val instruction = INVOKEVIRTUAL(declaringClass, name, descriptor)
+    val tacToBytecodePCMap: mutable.Map[Stmt[_], Int] = mutable.Map.empty
+    tac.stmts.foreach { s =>
+      s match {
+        case Assignment(pc, targetVar, expr) =>
+          //todo: etwas schlauer das verwalten
+          //todo: hashmaps simple halten
+          tacToBytecodePCMap += s -> 0
+          tacToBytecodePCMap += (((pc, 0), currentPC))
+          currentPC = StmtProcessor.processAssignment(targetVar, expr, instructionsWithPCs, currentPC)
+        case ExprStmt(pc, expr) =>
+          tacToBytecodePCMap += (((pc, 0), currentPC))
+          currentPC = ExprUtils.processExpression(expr, instructionsWithPCs, currentPC)
+        case If(pc, left, condition, right, target) =>
+          tacToBytecodePCMap += (((pc, target), currentPC))
+          currentPC = StmtProcessor.processIf(left, condition, right, target, instructionsWithPCs, currentPC)
+        //Register allocator für variables
+        //liste von variablen die existieren
+        //Todo do tests :D
+        case VirtualMethodCall(_, declaringClass, isInterface, name, descriptor, _, _) =>
+          if (isInterface) {
+            //labeledCode.insert(pc, InsertionPosition.At, Seq(INVOKEINTERFACE(declaringClass, name, descriptor)))
+          } else {
+            val instruction = INVOKEVIRTUAL(declaringClass, name, descriptor)
+            instructionsWithPCs += ((currentPC, instruction))
+            currentPC += instruction.length
+          }
+        case Return(_) =>
+          val instruction = RETURN
           instructionsWithPCs += ((currentPC, instruction))
           currentPC += instruction.length
-        }
-      case Return(_) =>
-        val instruction = RETURN
-        instructionsWithPCs += ((currentPC, instruction))
-        currentPC += instruction.length
-      case Throw(_,_) =>
-        //ToDo: fix initialization
-        val instruction = ATHROW
-        instructionsWithPCs += ((currentPC, instruction))
-      //currentPC += instruction.length
-      case _ =>
+        case Throw(_, _) =>
+          //ToDo: fix initialization
+          val instruction = ATHROW
+          instructionsWithPCs += ((currentPC, instruction))
+        //currentPC += instruction.length
+        case _ =>
+      }
     }
     instructionsWithPCs
   }
