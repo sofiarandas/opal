@@ -110,7 +110,7 @@ object ExprUtils {
   }
 
 
-  private def loadVariable(variable: Var[_], instructionsWithPCs: ArrayBuffer[(Int, Instruction)], currentPC: Int, isForLoop: Boolean): Int = {
+  def loadVariable(variable: Var[_], instructionsWithPCs: ArrayBuffer[(Int, Instruction)], currentPC: Int, isForLoop: Boolean): Int = {
     val variableName = variable match {
       case uVar: UVar[_] => if(isForLoop){
         handleUVarName(uVar)
