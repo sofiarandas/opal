@@ -101,12 +101,12 @@ object TACtoBC {
     val instructionsWithPCs = ArrayBuffer[(Int, Instruction)]()
     var currentPC = 0
     val tacToBytecodePCMap: mutable.Map[(Int, Int), Int] = mutable.Map.empty
-    tac.stmts.foreach {
-        case s @ Assignment(pc, targetVar, expr) =>
-          //todo: etwas schlauer das verwalten
-          //todo: hashmaps simple halten
+    val tacStmts = tac.stmts.zipWithIndex
+    tacStmts.foreach { case (stmt, index) =>
+      stmt match {
+        case Assignment(pc, targetVar, expr) =>
           tacToBytecodePCMap += (((pc, 0), currentPC))
-          currentPC = StmtProcessor.processAssignment(s, targetVar, expr, instructionsWithPCs, currentPC)
+          currentPC = StmtProcessor.processAssignment(targetVar, expr, instructionsWithPCs, currentPC, stmt , nextStmt = tacStmts(index + 1)._1)
         case ExprStmt(pc, expr) =>
           tacToBytecodePCMap += (((pc, 0), currentPC))
           currentPC = ExprUtils.processExpression(expr, instructionsWithPCs, currentPC, isForLoop = false)
@@ -134,6 +134,7 @@ object TACtoBC {
           instructionsWithPCs += ((currentPC, instruction))
         //currentPC += instruction.length
         case _ =>
+      }
     }
     instructionsWithPCs
   }

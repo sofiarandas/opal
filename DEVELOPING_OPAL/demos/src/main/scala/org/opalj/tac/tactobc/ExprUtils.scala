@@ -109,7 +109,7 @@ object ExprUtils {
       case _ => variable.name.drop(1).dropRight(1)
     }
     val index = getVariableIndex(variableName)
-    if(index > 0){
+    if(index >= 0){
       val instruction = variable.cTpe match {
         case ComputationalTypeInt => index match {
           case 0 => ILOAD_0
@@ -150,7 +150,6 @@ object ExprUtils {
       }
       instructionsWithPCs += ((currentPC, instruction))
       currentPC + (if (index < 4) 1 else 2)
-      //Todo handle IINC here(?)
     } else currentPC
   }
 
