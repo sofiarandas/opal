@@ -5,7 +5,7 @@ import org.opalj.BinaryArithmeticOperators.{Add, And, Divide, Modulo, Multiply, 
 import org.opalj.br.{ComputationalTypeDouble, ComputationalTypeFloat, ComputationalTypeInt, ComputationalTypeLong, ComputationalTypeReference}
 import org.opalj.br.instructions.{ALOAD, ALOAD_0, ALOAD_1, ALOAD_2, ALOAD_3, ASTORE, ASTORE_0, ASTORE_1, ASTORE_2, ASTORE_3, BIPUSH, DADD, DCONST_0, DCONST_1, DDIV, DLOAD, DLOAD_0, DLOAD_1, DLOAD_2, DLOAD_3, DMUL, DREM, DSTORE, DSTORE_0, DSTORE_1, DSTORE_2, DSTORE_3, DSUB, FADD, FCONST_0, FCONST_1, FCONST_2, FDIV, FLOAD, FLOAD_0, FLOAD_1, FLOAD_2, FLOAD_3, FMUL, FREM, FSTORE, FSTORE_0, FSTORE_1, FSTORE_2, FSTORE_3, FSUB, GETFIELD, GETSTATIC, IADD, IAND, ICONST_0, ICONST_1, ICONST_2, ICONST_3, ICONST_4, ICONST_5, ICONST_M1, IDIV, ILOAD, ILOAD_0, ILOAD_1, ILOAD_2, ILOAD_3, IMUL, IOR, IREM, ISHL, ISHR, ISTORE, ISTORE_0, ISTORE_1, ISTORE_2, ISTORE_3, ISUB, IUSHR, IXOR, Instruction, LADD, LAND, LCONST_0, LCONST_1, LDIV, LLOAD, LLOAD_0, LLOAD_1, LLOAD_2, LLOAD_3, LMUL, LOR, LREM, LSHL, LSHR, LSTORE, LSTORE_0, LSTORE_1, LSTORE_2, LSTORE_3, LSUB, LUSHR, LXOR, LoadClass, LoadDouble, LoadFloat, LoadInt, LoadLong, LoadMethodHandle, LoadMethodType, LoadString, SIPUSH}
 import org.opalj.bytecode.BytecodeProcessingFailedException
-import org.opalj.tac.{BinaryExpr, ClassConst, Const, DoubleConst, Expr, FloatConst, GetField, GetStatic, IntConst, LongConst, MethodHandleConst, MethodTypeConst, StringConst, UVar, Var}
+import org.opalj.tac.{BinaryExpr, ClassConst, Const, DVar, DoubleConst, Expr, FloatConst, GetField, GetStatic, IntConst, LongConst, MethodHandleConst, MethodTypeConst, StringConst, UVar, Var}
 
 import scala.collection.mutable
 import scala.collection.mutable.ArrayBuffer
@@ -90,7 +90,7 @@ object ExprUtils {
     })
   }
 
- private def handleUVarName(uVar: UVar[_], instructionsWithPCs: ArrayBuffer[(Int, Instruction)], currentPC: Int): String = {
+ private def handleUVarName(uVar: UVar[_]): String = {
    val isInterval = uVar.defSites.size > 1
     if(isInterval) {
       val variableName = uVar.name.drop(1).dropRight(6)
@@ -100,11 +100,20 @@ object ExprUtils {
     }
   }
 
+  private def handleDVarName(dVar: Var[_]): String = {
+    val isInterval = dVar.asVar.asInstanceOf[DVar[_]].useSites.size > 1
+    if(isInterval) {
+      dVar.name
+    } else {
+      ""
+    }
+  }
+
 
   private def loadVariable(variable: Var[_], instructionsWithPCs: ArrayBuffer[(Int, Instruction)], currentPC: Int, isForLoop: Boolean): Int = {
     val variableName = variable match {
       case uVar: UVar[_] => if(isForLoop){
-        handleUVarName(uVar, instructionsWithPCs, currentPC)
+        handleUVarName(uVar)
       } else variable.name.drop(1).dropRight(1)
       case _ => variable.name.drop(1).dropRight(1)
     }
@@ -154,51 +163,54 @@ object ExprUtils {
   }
 
   def storeVariable(variable: Var[_], instructionsWithPCs: ArrayBuffer[(Int, Instruction)], currentPC: Int): Int = {
-    val index = getVariableIndex(variable.name)
-    val storeInstruction = variable.cTpe match {
-      case ComputationalTypeInt => index match {
-      //The <n> must be an index into the local variable array of the current frame (§2.6).
-      // The value on the top of the operand stack must be of type int. It is popped from the operand stack, and the value of the local variable at <n> is set to value.
-        case 0 => ISTORE_0
-        case 1 => ISTORE_1
-        case 2 => ISTORE_2
-        case 3 => ISTORE_3
-        case _ => ISTORE(index)
+    val variableName = handleDVarName(variable)
+    val index = getVariableIndex(variableName)
+    if(index >= 0){
+      val storeInstruction = variable.cTpe match {
+        case ComputationalTypeInt => index match {
+          //The <n> must be an index into the local variable array of the current frame (§2.6).
+          // The value on the top of the operand stack must be of type int. It is popped from the operand stack, and the value of the local variable at <n> is set to value.
+          case 0 => ISTORE_0
+          case 1 => ISTORE_1
+          case 2 => ISTORE_2
+          case 3 => ISTORE_3
+          case _ => ISTORE(index)
+        }
+        case ComputationalTypeFloat => index match {
+          case 0 => FSTORE_0
+          case 1 => FSTORE_1
+          case 2 => FSTORE_2
+          case 3 => FSTORE_3
+          case _ => FSTORE(index)
+        }
+        case ComputationalTypeDouble => index match {
+          case 0 => DSTORE_0
+          case 1 => DSTORE_1
+          case 2 => DSTORE_2
+          case 3 => DSTORE_3
+          case _ => DSTORE(index)
+        }
+        case ComputationalTypeLong => index match {
+          case 0 => LSTORE_0
+          case 1 => LSTORE_1
+          case 2 => LSTORE_2
+          case 3 => LSTORE_3
+          case _ => LSTORE(index)
+        }
+        //todo: find out if I should handle this cases
+        case ComputationalTypeReference => index match {
+          case 0 => ASTORE_0
+          case 1 => ASTORE_1
+          case 2 => ASTORE_2
+          case 3 => ASTORE_3
+          case _ => ASTORE(index)
+        }
+        //todo: handle AASTORE
+        case _ => throw new UnsupportedOperationException("Unsupported computational type for storing variable" + variable)
       }
-      case ComputationalTypeFloat => index match {
-        case 0 => FSTORE_0
-        case 1 => FSTORE_1
-        case 2 => FSTORE_2
-        case 3 => FSTORE_3
-        case _ => FSTORE(index)
-      }
-      case ComputationalTypeDouble => index match {
-        case 0 => DSTORE_0
-        case 1 => DSTORE_1
-        case 2 => DSTORE_2
-        case 3 => DSTORE_3
-        case _ => DSTORE(index)
-      }
-      case ComputationalTypeLong => index match {
-        case 0 => LSTORE_0
-        case 1 => LSTORE_1
-        case 2 => LSTORE_2
-        case 3 => LSTORE_3
-        case _ => LSTORE(index)
-      }
-      //todo: find out if I should handle this cases
-      case ComputationalTypeReference => index match {
-        case 0 => ASTORE_0
-        case 1 => ASTORE_1
-        case 2 => ASTORE_2
-        case 3 => ASTORE_3
-        case _ => ASTORE(index)
-      }
-      //todo: handle AASTORE
-      case _ => throw new UnsupportedOperationException("Unsupported computational type for storing variable" + variable)
-    }
     instructionsWithPCs += ((currentPC, storeInstruction))
     currentPC + (if (index < 4) 1 else 2)
+    } else currentPC
   }
 
   private def handleFieldAccess(fieldExpr: Expr[_], instructionsWithPCs: ArrayBuffer[(Int, Instruction)], currentPC: Int): Int = {
