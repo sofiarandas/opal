@@ -4,22 +4,21 @@ package org.opalj.tac.tactobc
 import org.opalj.RelationalOperator
 import org.opalj.RelationalOperators.{EQ, GE, GT, LE, LT, NE}
 import org.opalj.br.instructions.{IFEQ, IFGE, IFGT, IFLE, IFLT, IFNE, IFNONNULL, IFNULL, IF_ACMPEQ, IF_ACMPNE, IF_ICMPEQ, IF_ICMPGE, IF_ICMPGT, IF_ICMPLE, IF_ICMPLT, IF_ICMPNE, Instruction}
-import org.opalj.tac.{Const, DUVar, DVar, Expr, If, IntConst, Stmt, UVar, Var}
+import org.opalj.tac.{DUVar, Expr, If, IntConst, Stmt, UVar, Var}
 
 import scala.collection.mutable.ArrayBuffer
 
 object StmtProcessor {
 
   //Assignment
-  def processAssignment(targetVar: Var[_], expr: Expr[_], instructionsWithPCs: ArrayBuffer[(Int, Instruction)], currentPC: Int, s: Stmt[_], nextStmt: Stmt[DUVar[_]]): Int = {
+  def processAssignment(targetVar: Var[_], expr: Expr[_], instructionsWithPCs: ArrayBuffer[(Int, Instruction)], currentPC: Int, s: Stmt[DUVar[_]], nextStmt: Stmt[DUVar[_]], loopHead: Boolean): Int = {
     val result = nextStmt match {
       //process for loops
-      case If(_, left, condition, right, target) => processIf(left, condition, right, target, instructionsWithPCs, currentPC)
-      case _ => if(targetVar.asInstanceOf[DVar[_]].useSites.size == 1){
-        //Only loading
-        val afterExprPC = ExprUtils.processExpression(expr, instructionsWithPCs, currentPC, isForLoop = false)
-        afterExprPC
-      }//Processing RHS
+      case If(_, left, condition, right, target) =>
+        processForLoop(s, nextStmt, instructionsWithPCs, currentPC)
+      //is a normal if
+      case _ =>
+        //Processing RHS
         val afterExprPC = ExprUtils.processExpression(expr, instructionsWithPCs, currentPC, isForLoop = false)
         //Processing LHS
         val finalPC = ExprUtils.storeVariable(targetVar, instructionsWithPCs, afterExprPC)
@@ -28,18 +27,34 @@ object StmtProcessor {
     result
   }
 
-  def processIf(left: Expr[_], condition: RelationalOperator, right: Expr[_], gotoLabel: Int, instructionsWithPCs: ArrayBuffer[(Int, Instruction)], currentPC: Int): Int = {
+  private def processForLoop(assignmentStmt: Stmt[DUVar[_]], ifStmt: Stmt[DUVar[_]], instructionsWithPCs: ArrayBuffer[(Int, Instruction)], currentPC: Int): Int = {
+    val ifStmtValues = ifStmt.asIf
+    generateIfInstruction(ifStmtValues.left, ifStmtValues.right, ifStmtValues.condition, instructionsWithPCs, currentPC, 0)
+    val assignmentValues= assignmentStmt.asAssignment
+    ExprUtils.processExpression(assignmentValues.expr, instructionsWithPCs, currentPC, isForLoop = false)
+  }
+
+  def processIf(left: Expr[_], condition: RelationalOperator, right: Expr[_], gotoLabel: Int, instructionsWithPCs: ArrayBuffer[(Int, Instruction)], currentPC: Int, s: Stmt[DUVar[_]], previousStmt: Stmt[DUVar[_]]): Int = {
+    //check if previous stmt was assignment
+    if(previousStmt.isAssignment){
+      //processForLoop already handles it
+      return currentPC
+    }
     // check if for loop
     val isForLoop = detectForLoop(left, right)
-    if (isForLoop) {
-      // Handle for loop
-      instructionsWithPCs.remove(instructionsWithPCs.size - 1)
-    }
     // process the left expr and save the pc to give in the right expr processing
     val leftPC = ExprUtils.processExpression(left, instructionsWithPCs, currentPC, isForLoop)
     // process the right expr
     val rightPC = ExprUtils.processExpression(right, instructionsWithPCs, leftPC, isForLoop)
+    generateIfInstruction(left, right, condition, instructionsWithPCs, currentPC, rightPC)
+  }
 
+  private def detectForLoop(left: Expr[_], right: Expr[_]): Boolean = (left, right) match {
+    case (uVarLeft: UVar[_], uVarRight: UVar[_]) => uVarLeft.defSites.nonEmpty && uVarRight.defSites.nonEmpty
+    case _ => false
+  }
+
+  def generateIfInstruction(left: Expr[_], right: Expr[_], condition: RelationalOperator, instructionsWithPCs: ArrayBuffer[(Int, Instruction)], currentPC: Int, rightPC: Int): Int = {
     val instruction = (left, right) match {
       case (IntConst(_, 0), _) | (_, IntConst(_, 0)) =>
         condition match {
@@ -60,12 +75,12 @@ object StmtProcessor {
           //
           //ToDo: find out the difference
           /*case CMPG =>
-          case CMPL =>
-          //
-          // Operators to compare long values.
-          //
-          case CMP =>
-           */
+        case CMPL =>
+        //
+        // Operators to compare long values.
+        //
+        case CMP =>
+         */
         }
       case (IntConst(_, _), IntConst(_, _)) =>
         condition match {
@@ -90,21 +105,15 @@ object StmtProcessor {
             println("this is fake: ")
             IFGE(-1)
         }
-      }
+    }
     val offsetPC = {
-      currentPC + (rightPC - currentPC)
+      if(rightPC > 0 && rightPC > currentPC){
+        currentPC + (rightPC - currentPC)
+      }else{
+        return currentPC
+      }
     }
     instructionsWithPCs += ((offsetPC, instruction))
     offsetPC + instruction.length
-  }
-
-
-  private def detectForLoop(left: Expr[_], right: Expr[_]): Boolean = left match {
-    case uVar: UVar[_] if uVar.defSites.nonEmpty =>
-      right match {
-        case _: UVar[_] | _: Const => true
-        case _ => false
-      }
-    case _ => false
   }
 }

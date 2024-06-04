@@ -78,7 +78,7 @@ object ExprUtils {
   private val variableIndexMap: mutable.Map[String, Int] = mutable.Map.empty
   private var nextAvailableIndex: Int = 1
 
-  private def getVariableIndex(variableName: String): Int = {
+  def getVariableIndex(variableName: String): Int = {
     variableIndexMap.getOrElseUpdate(variableName, {
       if(variableName.nonEmpty){
         val newIndex = nextAvailableIndex

@@ -106,13 +106,13 @@ object TACtoBC {
       stmt match {
         case Assignment(pc, targetVar, expr) =>
           tacToBytecodePCMap += (((pc, 0), currentPC))
-          currentPC = StmtProcessor.processAssignment(targetVar, expr, instructionsWithPCs, currentPC, stmt , nextStmt = tacStmts(index + 1)._1)
+          currentPC = StmtProcessor.processAssignment(targetVar, expr, instructionsWithPCs, currentPC, stmt , nextStmt = tacStmts(index + 1)._1, loopHead = true)
         case ExprStmt(pc, expr) =>
           tacToBytecodePCMap += (((pc, 0), currentPC))
           currentPC = ExprUtils.processExpression(expr, instructionsWithPCs, currentPC, isForLoop = false)
-        case s @ If(pc, left, condition, right, target) =>
+        case If(pc, left, condition, right, target) =>
           tacToBytecodePCMap += (((pc, target), currentPC))
-          currentPC = StmtProcessor.processIf(left, condition, right, target, instructionsWithPCs, currentPC)
+          currentPC = StmtProcessor.processIf(left, condition, right, target, instructionsWithPCs, currentPC, stmt, previousStmt = tacStmts(index - 1)._1)
         //Register allocator für variables
         //liste von variablen die existieren
         //Todo do tests :D
