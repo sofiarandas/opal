@@ -112,7 +112,7 @@ object TACtoBC {
           currentPC = ExprUtils.processExpression(expr, instructionsWithPCs, currentPC, isForLoop = false)
         case If(pc, left, condition, right, target) =>
           tacToBytecodePCMap += (((pc, target), currentPC))
-          currentPC = StmtProcessor.processIf(left, condition, right, target, instructionsWithPCs, currentPC, stmt, previousStmt = tacStmts(index - 1)._1)
+          currentPC = StmtProcessor.processIf(left, condition, right, target, instructionsWithPCs, currentPC, previousStmt = tacStmts(index - 1)._1)
         //Register allocator für variables
         //liste von variablen die existieren
         //Todo do tests :D

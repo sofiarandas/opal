@@ -29,17 +29,17 @@ object StmtProcessor {
 
   private def processForLoop(assignmentStmt: Stmt[DUVar[_]], ifStmt: Stmt[DUVar[_]], instructionsWithPCs: ArrayBuffer[(Int, Instruction)], currentPC: Int): Int = {
     val ifStmtValues = ifStmt.asIf
-    generateIfInstruction(ifStmtValues.left, ifStmtValues.right, ifStmtValues.condition, instructionsWithPCs, currentPC, 0)
+    processIf(ifStmtValues.left, ifStmtValues.condition, ifStmtValues.right, ifStmtValues.target, instructionsWithPCs, currentPC, ifStmt)
     val assignmentValues= assignmentStmt.asAssignment
     ExprUtils.processExpression(assignmentValues.expr, instructionsWithPCs, currentPC, isForLoop = false)
   }
 
-  def processIf(left: Expr[_], condition: RelationalOperator, right: Expr[_], gotoLabel: Int, instructionsWithPCs: ArrayBuffer[(Int, Instruction)], currentPC: Int, s: Stmt[DUVar[_]], previousStmt: Stmt[DUVar[_]]): Int = {
+  def processIf(left: Expr[_], condition: RelationalOperator, right: Expr[_], gotoLabel: Int, instructionsWithPCs: ArrayBuffer[(Int, Instruction)], currentPC: Int, previousStmt: Stmt[DUVar[_]]): Int = {
     //check if previous stmt was assignment
-    if(previousStmt.isAssignment){
+    /*if(previousStmt.isAssignment){
       //processForLoop already handles it
       return currentPC
-    }
+    }*/
     // check if for loop
     val isForLoop = detectForLoop(left, right)
     // process the left expr and save the pc to give in the right expr processing
