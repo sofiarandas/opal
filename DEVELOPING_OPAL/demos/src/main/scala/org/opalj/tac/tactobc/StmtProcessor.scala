@@ -3,8 +3,8 @@ package org.opalj.tac.tactobc
 
 import org.opalj.RelationalOperator
 import org.opalj.RelationalOperators._
-import org.opalj.br.instructions.{IFEQ, IFGE, IFGT, IFLE, IFLT, IFNE, IFNONNULL, IFNULL, IF_ICMPEQ, IF_ICMPGE, IF_ICMPGT, IF_ICMPLE, IF_ICMPLT, IF_ICMPNE, Instruction}
-import org.opalj.tac.{DUVar, Expr, If, IntConst, Stmt, Var}
+import org.opalj.br.instructions.{GOTO, IFEQ, IFGE, IFGT, IFLE, IFLT, IFNE, IFNONNULL, IFNULL, IF_ICMPEQ, IF_ICMPGE, IF_ICMPGT, IF_ICMPLE, IF_ICMPLT, IF_ICMPNE, Instruction}
+import org.opalj.tac.{DUVar, Expr, Goto, If, IntConst, Stmt, Var}
 
 import scala.collection.mutable.ArrayBuffer
 
@@ -14,17 +14,32 @@ object StmtProcessor {
   def processAssignment(targetVar: Var[_], expr: Expr[_], instructionsWithPCs: ArrayBuffer[(Int, Instruction)], currentPC: Int, s: Stmt[DUVar[_]], nextStmt: Stmt[DUVar[_]], loopHead: Boolean): Int = {
     val result = nextStmt match {
       //process for loops
+      //(start) -> head of the loop
       case If(_, left, condition, right, target) =>
         processForLoop(s, nextStmt, instructionsWithPCs, currentPC)
+      //(end) -> jump back to condition
+      case Goto(_, target) =>
+        processGoto(s, instructionsWithPCs, currentPC)
       //is a normal if
       case _ =>
         //Processing RHS
         val afterExprPC = ExprUtils.processExpression(expr, instructionsWithPCs, currentPC, isForLoop = false)
-        //Processing LHS
-        val finalPC = ExprUtils.storeVariable(targetVar, instructionsWithPCs, afterExprPC)
-        finalPC
+        if(expr.isConst || expr.isVar){
+          //Processing LHS to store vars and const's only
+          val finalPC = ExprUtils.storeVariable(targetVar, instructionsWithPCs, afterExprPC)
+          return finalPC
+        }
+        afterExprPC
     }
     result
+  }
+
+  def processGoto(assignmentStmt: Stmt[DUVar[_]], instructionsWithPCs: ArrayBuffer[(Int, Instruction)], currentPC: Int): Int = {
+    val assignmentValues= assignmentStmt.asAssignment
+    val afterIincPC = ExprUtils.handleBinaryExpr(assignmentValues.expr.asBinaryExpr, instructionsWithPCs, currentPC)
+    val instruction = GOTO(-1)
+    instructionsWithPCs += ((afterIincPC, instruction))
+    currentPC + instruction.length
   }
 
   private def processForLoop(assignmentStmt: Stmt[DUVar[_]], ifStmt: Stmt[DUVar[_]], instructionsWithPCs: ArrayBuffer[(Int, Instruction)], currentPC: Int): Int = {
