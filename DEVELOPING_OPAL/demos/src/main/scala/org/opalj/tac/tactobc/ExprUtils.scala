@@ -112,9 +112,7 @@ object ExprUtils {
 
   def loadVariable(variable: Var[_], instructionsWithPCs: ArrayBuffer[(Int, Instruction)], currentPC: Int, isForLoop: Boolean): Int = {
     val variableName = variable match {
-      case uVar: UVar[_] => if(isForLoop){
-        handleUVarName(uVar)
-      } else variable.name.drop(1).dropRight(1)
+      case uVar: UVar[_] => handleUVarName(uVar)
       case _ => variable.name.drop(1).dropRight(1)
     }
     val index = getVariableIndex(variableName)
@@ -232,20 +230,14 @@ object ExprUtils {
     //val rightPC = processExpression(binaryExpr.right, instructionsWithPCs, leftPC, isForLoop = false)
     val (instruction, instructionLength) = (binaryExpr.cTpe, binaryExpr.op) match {
       //Double
-      case (ComputationalTypeDouble, Add) => (binaryExpr.left, binaryExpr.right) match {
-        case (_, DoubleConst(_, _)) =>(IINC(getVariableIndex(binaryExpr.left.asInstanceOf[UVar[_]].name), binaryExpr.right.asIntConst.value), 3)
-        case _ => (DADD, DADD.length)
-      }
+      case (ComputationalTypeDouble, Add) => (DADD, DADD.length)
       case (ComputationalTypeDouble, Subtract) => (DSUB, DSUB.length)
       case (ComputationalTypeDouble, Multiply) => (DMUL, DMUL.length)
       case (ComputationalTypeDouble, Divide) => (DDIV, DDIV.length)
       case (ComputationalTypeDouble, Modulo) => (DREM, DREM.length)
       //Todo figure out where and how to do with Negate
       //Float
-      case (ComputationalTypeFloat, Add) => (binaryExpr.left, binaryExpr.right) match {
-        case (_, FloatConst(_, _)) => (IINC(getVariableIndex(binaryExpr.left.asInstanceOf[UVar[_]].name), binaryExpr.right.asIntConst.value), 3)
-        case _ => (FADD, FADD.length)
-      }
+      case (ComputationalTypeFloat, Add) => (FADD, FADD.length)
       case (ComputationalTypeFloat, Subtract) => (FSUB, FSUB.length)
       case (ComputationalTypeFloat, Multiply) => (FMUL, FMUL.length)
       case (ComputationalTypeFloat, Divide) => (FDIV, FDIV.length)
@@ -253,7 +245,10 @@ object ExprUtils {
       //Int
       case (ComputationalTypeInt, Add) =>
         (binaryExpr.left, binaryExpr.right) match {
-          case (_, IntConst(_, _)) =>  (IINC(getVariableIndex(binaryExpr.left.asInstanceOf[UVar[_]].name), binaryExpr.right.asIntConst.value), 3)
+
+          case (_, IntConst(_, _)) => val variableName = handleUVarName(binaryExpr.left.asInstanceOf[UVar[_]])
+                                      val variableLvl = getVariableIndex(variableName)
+                                      (IINC(variableLvl, binaryExpr.right.asIntConst.value), 3)
           case _ => (IADD, IADD.length)
         }
       case (ComputationalTypeInt, Subtract) => (ISUB, ISUB.length)
@@ -267,10 +262,7 @@ object ExprUtils {
       case (ComputationalTypeInt, UnsignedShiftRight) => (IUSHR, IUSHR.length)
       case (ComputationalTypeInt, XOr) => (IXOR, IXOR.length)
       //Long
-      case (ComputationalTypeLong, Add) => (binaryExpr.left, binaryExpr.right) match {
-        case (_, LongConst(_, _)) => (IINC(getVariableIndex(binaryExpr.left.asInstanceOf[UVar[_]].name), binaryExpr.right.asIntConst.value), 3)
-        case _ => (LADD, LADD.length)
-      }
+      case (ComputationalTypeLong, Add) => (LADD, LADD.length)
       case (ComputationalTypeLong, Subtract) => (LSUB, LSUB.length)
       case (ComputationalTypeLong, Multiply) => (LMUL, LMUL.length)
       case (ComputationalTypeLong, Divide) => (LDIV, LDIV.length)

@@ -39,7 +39,8 @@ object StmtProcessor {
     val afterIincPC = ExprUtils.handleBinaryExpr(assignmentValues.expr.asBinaryExpr, instructionsWithPCs, currentPC)
     val instruction = GOTO(-1)
     instructionsWithPCs += ((afterIincPC, instruction))
-    currentPC + instruction.length
+    val length = instruction.length
+    afterIincPC + length
   }
 
   private def processForLoop(assignmentStmt: Stmt[DUVar[_]], ifStmt: Stmt[DUVar[_]], instructionsWithPCs: ArrayBuffer[(Int, Instruction)], currentPC: Int): Int = {
@@ -62,6 +63,10 @@ object StmtProcessor {
     }
     // process the left expr and save the pc to give in the right expr processing
     val leftPC = ExprUtils.processExpression(left, instructionsWithPCs, currentPC, isForLoop = false)
+    if(right.asIntConst.value == 0){
+      //comparing with 0 -> no need to load constant
+      return generateIfInstruction(left, condition, right, instructionsWithPCs, leftPC, 0)
+    }
     // process the right expr
     val rightPC = ExprUtils.processExpression(right, instructionsWithPCs, leftPC, isForLoop = false)
     generateIfInstruction(left, condition, right, instructionsWithPCs, currentPC, rightPC)
