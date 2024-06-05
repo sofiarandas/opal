@@ -10,6 +10,8 @@ public class HelloWorldToString {
             x++;
         if(x <= 0)
             System.out.println("Hello World!");
+        if(x > 1)
+            System.out.println("vos podes sofi");
         System.out.println("Hello World!");
     }
 }
