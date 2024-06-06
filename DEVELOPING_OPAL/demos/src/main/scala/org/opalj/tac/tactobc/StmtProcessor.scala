@@ -4,34 +4,20 @@ package org.opalj.tac.tactobc
 import org.opalj.RelationalOperator
 import org.opalj.RelationalOperators._
 import org.opalj.br.instructions.{GOTO, IFEQ, IFGE, IFGT, IFLE, IFLT, IFNE, IFNONNULL, IFNULL, IF_ICMPEQ, IF_ICMPGE, IF_ICMPGT, IF_ICMPLE, IF_ICMPLT, IF_ICMPNE, Instruction}
-import org.opalj.tac.{DUVar, Expr, Goto, If, IntConst, Stmt, Var}
+import org.opalj.tac.{DUVar, Expr, IntConst, Stmt, Var}
 
 import scala.collection.mutable.ArrayBuffer
 
 object StmtProcessor {
 
   //Assignment
-  def processAssignment(targetVar: Var[_], expr: Expr[_], instructionsWithPCs: ArrayBuffer[(Int, Instruction)], currentPC: Int, s: Stmt[DUVar[_]], nextStmt: Stmt[DUVar[_]], loopHead: Boolean): Int = {
-    val result = nextStmt match {
-      //process for loops
-      //(start) -> head of the loop
-      case If(_, left, condition, right, target) =>
-        processForLoop(s, nextStmt, instructionsWithPCs, currentPC)
-      //(end) -> jump back to condition
-      case Goto(_, target) =>
-        processGoto(s, instructionsWithPCs, currentPC)
-      //is a normal if
-      case _ =>
-        //Processing RHS
-        val afterExprPC = ExprUtils.processExpression(expr, instructionsWithPCs, currentPC, isForLoop = false)
-        if(expr.isConst || expr.isVar){
-          //Processing LHS to store vars and const's only
-          val finalPC = ExprUtils.storeVariable(targetVar, instructionsWithPCs, afterExprPC)
-          return finalPC
-        }
-        afterExprPC
-    }
-    result
+  def processAssignment(targetVar: Var[_], expr: Expr[_], instructionsWithPCs: ArrayBuffer[(Int, Instruction)], currentPC: Int): Int = {
+    // Evaluate the RHS and update the PC accordingly
+    val afterExprPC = ExprUtils.processExpression(expr, instructionsWithPCs, currentPC)
+    // Store the result into the target variable and update the PC
+    val finalPC = ExprUtils.storeVariable(targetVar, instructionsWithPCs, afterExprPC)
+    // Return the updated PC
+    finalPC
   }
 
   def processGoto(assignmentStmt: Stmt[DUVar[_]], instructionsWithPCs: ArrayBuffer[(Int, Instruction)], currentPC: Int): Int = {
@@ -43,17 +29,17 @@ object StmtProcessor {
     afterIincPC + length
   }
 
-  private def processForLoop(assignmentStmt: Stmt[DUVar[_]], ifStmt: Stmt[DUVar[_]], instructionsWithPCs: ArrayBuffer[(Int, Instruction)], currentPC: Int): Int = {
+ /* private def processForLoop(assignmentStmt: Stmt[DUVar[_]], ifStmt: Stmt[DUVar[_]], instructionsWithPCs: ArrayBuffer[(Int, Instruction)], currentPC: Int): Int = {
     println(s"Processing for loop with assignment: $assignmentStmt and if: $ifStmt")
     // >(1) load needed variable for comparison
     val ifStmtValues = ifStmt.asIf
-    val afterLoadingVarPC = ExprUtils.loadVariable(ifStmtValues.left.asVar, instructionsWithPCs, currentPC, isForLoop = true)
+    val afterLoadingVarPC = ExprUtils.loadVariable(ifStmtValues.left.asVar, instructionsWithPCs, currentPC)
     // >(2) handle Loop Anker for comparison
     val assignmentValues= assignmentStmt.asAssignment
-    val afterLoopAnkerPC = ExprUtils.processExpression(assignmentValues.expr, instructionsWithPCs, afterLoadingVarPC, isForLoop = false)
+    val afterLoopAnkerPC = ExprUtils.processExpression(assignmentValues.expr, instructionsWithPCs, afterLoadingVarPC)
     // >(3) generate IF instruction
     generateIfInstruction(ifStmtValues.left, ifStmtValues.condition, ifStmtValues.right, instructionsWithPCs, afterLoopAnkerPC, 0)
-  }
+  }*/
 
   def processIf(left: Expr[_], condition: RelationalOperator, right: Expr[_], gotoLabel: Int, instructionsWithPCs: ArrayBuffer[(Int, Instruction)], currentPC: Int, previousStmt: Stmt[DUVar[_]]): Int = {
     //check if previous stmt was assignment
@@ -62,13 +48,13 @@ object StmtProcessor {
       return currentPC
     }
     // process the left expr and save the pc to give in the right expr processing
-    val leftPC = ExprUtils.processExpression(left, instructionsWithPCs, currentPC, isForLoop = false)
+    val leftPC = ExprUtils.processExpression(left, instructionsWithPCs, currentPC)
     if(right.asIntConst.value == 0){
       //comparing with 0 -> no need to load constant
       return generateIfInstruction(left, condition, right, instructionsWithPCs, leftPC, 0)
     }
     // process the right expr
-    val rightPC = ExprUtils.processExpression(right, instructionsWithPCs, leftPC, isForLoop = false)
+    val rightPC = ExprUtils.processExpression(right, instructionsWithPCs, leftPC)
     generateIfInstruction(left, condition, right, instructionsWithPCs, currentPC, rightPC)
   }
 

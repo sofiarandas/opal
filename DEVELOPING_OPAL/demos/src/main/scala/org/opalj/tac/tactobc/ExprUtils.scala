@@ -13,10 +13,10 @@ import scala.collection.mutable.ArrayBuffer
 object ExprUtils {
 
 
-  def processExpression(expr: Expr[_], instructionsWithPCs: ArrayBuffer[(Int, Instruction)], currentPC: Int, isForLoop: Boolean): Int = {
+  def processExpression(expr: Expr[_], instructionsWithPCs: ArrayBuffer[(Int, Instruction)], currentPC: Int): Int = {
     expr match {
       case const: Const => loadConstant(const, instructionsWithPCs, currentPC)
-      case variable: Var[_] => loadVariable(variable, instructionsWithPCs, currentPC, isForLoop)
+      case variable: Var[_] => loadVariable(variable, instructionsWithPCs, currentPC)
       case fieldExpr: Expr[_] if fieldExpr.isInstanceOf[GetField[_]] || fieldExpr.isInstanceOf[GetStatic] => handleFieldAccess(fieldExpr, instructionsWithPCs, currentPC)
       case binaryExpr: BinaryExpr[_] => handleBinaryExpr(binaryExpr, instructionsWithPCs, currentPC)
       case _ =>
@@ -75,22 +75,19 @@ object ExprUtils {
   }
 
   // Map for variable indexing within methods
-  private val variableIndexMap: mutable.Map[String, Int] = mutable.Map.empty
+  private val variableLvlIndexMap: mutable.Map[Int, Int] = mutable.Map.empty
   private var nextAvailableIndex: Int = 1
 
-  def getVariableIndex(variableName: String): Int = {
-    variableIndexMap.getOrElseUpdate(variableName, {
-      if(variableName.nonEmpty){
+  def getVariableLvlIndex(variable: Var[_]): Int = {
+    val lvl = getVariableLvl(variable)
+    variableLvlIndexMap.getOrElseUpdate(lvl, {
         val newIndex = nextAvailableIndex
         nextAvailableIndex += 1
         newIndex
-      } else {
-        -1
-      }
-    })
+      })
   }
 
- private def handleUVarName(uVar: UVar[_]): String = {
+ /*private def handleUVarName(uVar: UVar[_]): String = {
    val isInterval = uVar.defSites.size > 1
     if(isInterval) {
       val variableName = uVar.name.drop(1).dropRight(6)
@@ -98,25 +95,32 @@ object ExprUtils {
     } else {
       ""
     }
-  }
+  }*/
 
-  private def handleDVarName(dVar: Var[_]): String = {
+  /*private def handleDVarName(dVar: Var[_]): String = {
     val isInterval = dVar.asVar.asInstanceOf[DVar[_]].useSites.size > 1
     if(isInterval) {
       dVar.name
     } else {
       ""
     }
+  }*/
+
+  def getVariableLvl(variable: Var[_]): Int = {
+    val result = variable match {
+      case uVar: UVar[_] => uVar.definedBy.toList.head
+      case dVar : DVar[_] => dVar.origin
+      case _ => -1
+    }
+    result
   }
 
-
-  def loadVariable(variable: Var[_], instructionsWithPCs: ArrayBuffer[(Int, Instruction)], currentPC: Int, isForLoop: Boolean): Int = {
-    val variableName = variable match {
+  def loadVariable(variable: Var[_], instructionsWithPCs: ArrayBuffer[(Int, Instruction)], currentPC: Int): Int = {
+    /*val variableName = variable match {
       case uVar: UVar[_] => handleUVarName(uVar)
       case _ => variable.name.drop(1).dropRight(1)
-    }
-    val index = getVariableIndex(variableName)
-    if(index >= 0){
+    }*/
+    val index = getVariableLvlIndex(variable)
       val instruction = variable.cTpe match {
         case ComputationalTypeInt => index match {
           case 0 => ILOAD_0
@@ -157,13 +161,11 @@ object ExprUtils {
       }
       instructionsWithPCs += ((currentPC, instruction))
       currentPC + (if (index < 4) 1 else 2)
-    } else currentPC
   }
 
   def storeVariable(variable: Var[_], instructionsWithPCs: ArrayBuffer[(Int, Instruction)], currentPC: Int): Int = {
-    val variableName = handleDVarName(variable)
-    val index = getVariableIndex(variableName)
-    if(index >= 0){
+    //val variableName = handleDVarName(variable)
+    val index = getVariableLvlIndex(variable)
       val storeInstruction = variable.cTpe match {
         case ComputationalTypeInt => index match {
           //The <n> must be an index into the local variable array of the current frame (§2.6).
@@ -208,7 +210,6 @@ object ExprUtils {
       }
     instructionsWithPCs += ((currentPC, storeInstruction))
     currentPC + (if (index < 4) 1 else 2)
-    } else currentPC
   }
 
   private def handleFieldAccess(fieldExpr: Expr[_], instructionsWithPCs: ArrayBuffer[(Int, Instruction)], currentPC: Int): Int = {
@@ -225,9 +226,9 @@ object ExprUtils {
 
   def handleBinaryExpr(binaryExpr: BinaryExpr[_], instructionsWithPCs: ArrayBuffer[(Int, Instruction)], currentPC: Int): Int = {
     // process the left expr and save the pc to give in the right expr processing
-    //val leftPC = processExpression(binaryExpr.left, instructionsWithPCs, currentPC, isForLoop = false)
+    val leftPC = processExpression(binaryExpr.left, instructionsWithPCs, currentPC)
     // process the right Expr
-    //val rightPC = processExpression(binaryExpr.right, instructionsWithPCs, leftPC, isForLoop = false)
+    val rightPC = processExpression(binaryExpr.right, instructionsWithPCs, leftPC)
     val (instruction, instructionLength) = (binaryExpr.cTpe, binaryExpr.op) match {
       //Double
       case (ComputationalTypeDouble, Add) => (DADD, DADD.length)
@@ -246,9 +247,9 @@ object ExprUtils {
       case (ComputationalTypeInt, Add) =>
         (binaryExpr.left, binaryExpr.right) match {
 
-          case (_, IntConst(_, _)) => val variableName = handleUVarName(binaryExpr.left.asInstanceOf[UVar[_]])
-                                      val variableLvl = getVariableIndex(variableName)
-                                      (IINC(variableLvl, binaryExpr.right.asIntConst.value), 3)
+          case (_, IntConst(_, _)) => //val variableName = handleUVarName(binaryExpr.left.asInstanceOf[UVar[_]])
+                                      //val variableLvl = getVariableIndex(binaryExpr.left.asVar)
+                                      (IINC(1, binaryExpr.right.asIntConst.value), 3)
           case _ => (IADD, IADD.length)
         }
       case (ComputationalTypeInt, Subtract) => (ISUB, ISUB.length)
@@ -276,7 +277,7 @@ object ExprUtils {
       //Unsupported
       case _ => throw new UnsupportedOperationException("Unsupported operation or computational type in BinaryExpr" + binaryExpr)
     }
-    val offsetPC = currentPC
+    val offsetPC = currentPC + (rightPC - currentPC)
     instructionsWithPCs += ((offsetPC, instruction))
     offsetPC + instructionLength
   }

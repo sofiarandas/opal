@@ -106,10 +106,10 @@ object TACtoBC {
       stmt match {
         case Assignment(pc, targetVar, expr) =>
           tacToBytecodePCMap += (((pc, 0), currentPC))
-          currentPC = StmtProcessor.processAssignment(targetVar, expr, instructionsWithPCs, currentPC, stmt , nextStmt = tacStmts(index + 1)._1, loopHead = true)
+          currentPC = StmtProcessor.processAssignment(targetVar, expr, instructionsWithPCs, currentPC)
         case ExprStmt(pc, expr) =>
           tacToBytecodePCMap += (((pc, 0), currentPC))
-          currentPC = ExprUtils.processExpression(expr, instructionsWithPCs, currentPC, isForLoop = false)
+          currentPC = ExprUtils.processExpression(expr, instructionsWithPCs, currentPC)
         case If(pc, left, condition, right, target) =>
           tacToBytecodePCMap += (((pc, target), currentPC))
           currentPC = StmtProcessor.processIf(left, condition, right, target, instructionsWithPCs, currentPC, previousStmt = tacStmts(index - 1)._1)
