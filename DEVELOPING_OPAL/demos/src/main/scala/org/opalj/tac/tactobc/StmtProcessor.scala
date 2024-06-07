@@ -3,8 +3,9 @@ package org.opalj.tac.tactobc
 
 import org.opalj.RelationalOperator
 import org.opalj.RelationalOperators._
-import org.opalj.br.instructions.{GOTO, IFEQ, IFGE, IFGT, IFLE, IFLT, IFNE, IFNONNULL, IFNULL, IF_ICMPEQ, IF_ICMPGE, IF_ICMPGT, IF_ICMPLE, IF_ICMPLT, IF_ICMPNE, Instruction}
-import org.opalj.tac.{DUVar, Expr, IntConst, Stmt, Var}
+import org.opalj.br.{MethodDescriptor, ReferenceType}
+import org.opalj.br.instructions.{GOTO, IFEQ, IFGE, IFGT, IFLE, IFLT, IFNE, IFNONNULL, IFNULL, IF_ICMPEQ, IF_ICMPGE, IF_ICMPGT, IF_ICMPLE, IF_ICMPLT, IF_ICMPNE, INVOKEVIRTUAL, Instruction}
+import org.opalj.tac.{Expr, IntConst, Var}
 
 import scala.collection.mutable.ArrayBuffer
 
@@ -20,48 +21,29 @@ object StmtProcessor {
     finalPC
   }
 
-  def processGoto(assignmentStmt: Stmt[DUVar[_]], instructionsWithPCs: ArrayBuffer[(Int, Instruction)], currentPC: Int): Int = {
-    val assignmentValues= assignmentStmt.asAssignment
-    val afterIincPC = ExprUtils.handleBinaryExpr(assignmentValues.expr.asBinaryExpr, instructionsWithPCs, currentPC)
-    val instruction = GOTO(-1)
-    instructionsWithPCs += ((afterIincPC, instruction))
-    val length = instruction.length
-    afterIincPC + length
+  def processVirtualMethodCall(declaringClass: ReferenceType, isInterface: Boolean, methodName: String, methodDescriptor: MethodDescriptor, receiver: Expr[_], params: Seq[Expr[_]], instructionsWithPCs: ArrayBuffer[(Int, Instruction)], currentPC: Int): Int = {
+    val instruction = /*if (isInterface) {
+      INVOKEINTERFACE
+    }else*/
+      INVOKEVIRTUAL(declaringClass, methodName, methodDescriptor)
+    instructionsWithPCs += ((currentPC, instruction))
+    currentPC + instruction.length
   }
 
- /* private def processForLoop(assignmentStmt: Stmt[DUVar[_]], ifStmt: Stmt[DUVar[_]], instructionsWithPCs: ArrayBuffer[(Int, Instruction)], currentPC: Int): Int = {
-    println(s"Processing for loop with assignment: $assignmentStmt and if: $ifStmt")
-    // >(1) load needed variable for comparison
-    val ifStmtValues = ifStmt.asIf
-    val afterLoadingVarPC = ExprUtils.loadVariable(ifStmtValues.left.asVar, instructionsWithPCs, currentPC)
-    // >(2) handle Loop Anker for comparison
-    val assignmentValues= assignmentStmt.asAssignment
-    val afterLoopAnkerPC = ExprUtils.processExpression(assignmentValues.expr, instructionsWithPCs, afterLoadingVarPC)
-    // >(3) generate IF instruction
-    generateIfInstruction(ifStmtValues.left, ifStmtValues.condition, ifStmtValues.right, instructionsWithPCs, afterLoopAnkerPC, 0)
-  }*/
+  def processGoto(instructionsWithPCs: ArrayBuffer[(Int, Instruction)], currentPC: Int): Int = {
+    val instruction = GOTO(-1)
+    instructionsWithPCs += ((currentPC, instruction))
+    val length = instruction.length
+    currentPC + length
+  }
 
-  def processIf(left: Expr[_], condition: RelationalOperator, right: Expr[_], gotoLabel: Int, instructionsWithPCs: ArrayBuffer[(Int, Instruction)], currentPC: Int, previousStmt: Stmt[DUVar[_]]): Int = {
-    //check if previous stmt was assignment
-    if(previousStmt.isAssignment){
-      //processForLoop already handles it, skip stmt processing but save target (?)
-      return currentPC
-    }
+  def processIf(left: Expr[_], condition: RelationalOperator, right: Expr[_], gotoLabel: Int, instructionsWithPCs: ArrayBuffer[(Int, Instruction)], currentPC: Int): Int = {
     // process the left expr and save the pc to give in the right expr processing
     val leftPC = ExprUtils.processExpression(left, instructionsWithPCs, currentPC)
-    if(right.asIntConst.value == 0){
-      //comparing with 0 -> no need to load constant
-      return generateIfInstruction(left, condition, right, instructionsWithPCs, leftPC, 0)
-    }
     // process the right expr
     val rightPC = ExprUtils.processExpression(right, instructionsWithPCs, leftPC)
     generateIfInstruction(left, condition, right, instructionsWithPCs, currentPC, rightPC)
   }
-
- /* private def detectForLoop(left: Expr[_], right: Expr[_]): Boolean = (left, right) match {
-    case (uVarLeft: UVar[_], uVarRight: UVar[_]) => uVarLeft.defSites.nonEmpty && uVarRight.defSites.nonEmpty
-    case _ => false
-  }*/
 
   def generateIfInstruction(left: Expr[_], condition: RelationalOperator, right: Expr[_], instructionsWithPCs: ArrayBuffer[(Int, Instruction)], currentPC: Int, rightPC: Int): Int = {
     val instruction = (left, right) match {

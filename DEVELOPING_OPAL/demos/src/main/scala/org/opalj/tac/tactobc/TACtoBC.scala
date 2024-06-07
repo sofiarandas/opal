@@ -3,12 +3,11 @@ package org.opalj.tac.tactobc
 
 import org.opalj.br.Method
 import org.opalj.br.analyses.Project
-import org.opalj.br.instructions.{ATHROW, INVOKEVIRTUAL, Instruction, RETURN}
+import org.opalj.br.instructions.{GOTO, IFGT, IFLT, IF_ICMPGE, IF_ICMPLE, Instruction, RETURN}
 import org.opalj.tac._
 import org.opalj.value.ValueInformation
 
 import java.io.File
-import scala.collection.mutable
 import scala.collection.mutable.ArrayBuffer
 
 object TACtoBC {
@@ -98,45 +97,90 @@ object TACtoBC {
    * @return An array of bytecode instructions representing the method's functionality, ready to be executed by the JVM.
    */
   def translateSingleTACtoBC(tac: AITACode[TACMethodParameter, ValueInformation]): ArrayBuffer[(Int, Instruction)] = {
-    val instructionsWithPCs = ArrayBuffer[(Int, Instruction)]()
+    val generatedByteCodeWithPC = ArrayBuffer[(Int, Instruction)]()
     var currentPC = 0
-    val tacToBytecodePCMap: mutable.Map[(Int, Int), Int] = mutable.Map.empty
+    val tacTargetToByteCodePcs = ArrayBuffer[(Int, Int)]()
+    //first pass
     val tacStmts = tac.stmts.zipWithIndex
     tacStmts.foreach { case (stmt, index) =>
       stmt match {
         case Assignment(pc, targetVar, expr) =>
-          tacToBytecodePCMap += (((pc, 0), currentPC))
-          currentPC = StmtProcessor.processAssignment(targetVar, expr, instructionsWithPCs, currentPC)
+          tacTargetToByteCodePcs += ((-1, currentPC))
+          currentPC = StmtProcessor.processAssignment(targetVar, expr, generatedByteCodeWithPC, currentPC)
         case ExprStmt(pc, expr) =>
-          tacToBytecodePCMap += (((pc, 0), currentPC))
-          currentPC = ExprUtils.processExpression(expr, instructionsWithPCs, currentPC)
+          tacTargetToByteCodePcs += ((-1, currentPC))
+          currentPC = ExprUtils.processExpression(expr, generatedByteCodeWithPC, currentPC)
         case If(pc, left, condition, right, target) =>
-          tacToBytecodePCMap += (((pc, target), currentPC))
-          currentPC = StmtProcessor.processIf(left, condition, right, target, instructionsWithPCs, currentPC, previousStmt = tacStmts(index - 1)._1)
-        //Register allocator für variables
-        //liste von variablen die existieren
-        //Todo do tests :D
-        case VirtualMethodCall(_, declaringClass, isInterface, name, descriptor, _, _) =>
-          if (isInterface) {
-            //labeledCode.insert(pc, InsertionPosition.At, Seq(INVOKEINTERFACE(declaringClass, name, descriptor)))
-          } else {
-            val instruction = INVOKEVIRTUAL(declaringClass, name, descriptor)
-            instructionsWithPCs += ((currentPC, instruction))
-            currentPC += instruction.length
-          }
+          tacTargetToByteCodePcs += ((target, currentPC))
+          currentPC = StmtProcessor.processIf(left, condition, right, target, generatedByteCodeWithPC, currentPC)
+        case Goto(pc, target) =>
+          tacTargetToByteCodePcs += ((target, currentPC))
+          currentPC = StmtProcessor.processGoto(generatedByteCodeWithPC, currentPC)
+        case VirtualMethodCall(_, declaringClass, isInterface, name, descriptor, receiver, params) =>
+          tacTargetToByteCodePcs += ((-1, currentPC))
+          currentPC = StmtProcessor.processVirtualMethodCall(declaringClass, isInterface, name, descriptor, receiver, params, generatedByteCodeWithPC, currentPC)
         case Return(_) =>
+          tacTargetToByteCodePcs += ((-1, currentPC))
           val instruction = RETURN
-          instructionsWithPCs += ((currentPC, instruction))
+          generatedByteCodeWithPC += ((currentPC, instruction))
           currentPC += instruction.length
-        case Throw(_, _) =>
-          //ToDo: fix initialization
-          val instruction = ATHROW
-          instructionsWithPCs += ((currentPC, instruction))
-        //currentPC += instruction.length
         case _ =>
       }
     }
-    instructionsWithPCs
+    //second pass -> this time through the translated bytecode to calculate the right branching targets
+    val result = ArrayBuffer[(Int, Instruction)]()
+    // Index for TAC statements
+    var tacTargetToByteCodePcsIndex = 0
+
+    generatedByteCodeWithPC.zipWithIndex.foreach {
+      case ((pc, instruction), _) =>
+        // Match and update branch instructions
+        val updatedInstruction = instruction match {
+          case IFLT(-1) =>
+            tacTargetToByteCodePcsIndex -= 1
+            val instruction = IFLT(updateBranchTargets(tacTargetToByteCodePcs, tacTargetToByteCodePcsIndex))
+            tacTargetToByteCodePcsIndex += 1
+            instruction
+          case IFGT(-1) =>
+            tacTargetToByteCodePcsIndex -= 1
+            val instruction = IFGT(updateBranchTargets(tacTargetToByteCodePcs, tacTargetToByteCodePcsIndex))
+            tacTargetToByteCodePcsIndex += 1
+            instruction
+          case IF_ICMPGE(-1) =>
+            tacTargetToByteCodePcsIndex -= 1
+            val instruction = IF_ICMPGE(updateBranchTargets(tacTargetToByteCodePcs, tacTargetToByteCodePcsIndex))
+            tacTargetToByteCodePcsIndex += 1
+            instruction
+          case IF_ICMPLE(-1) =>
+            tacTargetToByteCodePcsIndex -= 1
+            val instruction = IF_ICMPLE(updateBranchTargets(tacTargetToByteCodePcs, tacTargetToByteCodePcsIndex))
+            tacTargetToByteCodePcsIndex += 1
+            instruction
+          case GOTO(-1) =>
+            GOTO(updateBranchTargets(tacTargetToByteCodePcs, tacTargetToByteCodePcsIndex))
+          case _ =>
+            instruction
+        }
+        result += ((pc, updatedInstruction))
+
+        // Only increment tacIndex when the current instruction corresponds to a TAC statement
+        if (tacTargetToByteCodePcsIndex < tacStmts.length && directAssociationExists(tacTargetToByteCodePcs, tacTargetToByteCodePcs(tacTargetToByteCodePcsIndex)._1, pc)) {
+          tacTargetToByteCodePcsIndex += 1
+        }
+    }
+    result
+  }
+
+
+
+  def updateBranchTargets(tacTargetToByteCodePcs: ArrayBuffer[(Int, Int)], tacTargetToByteCodePcsIndex: Int): Int = {
+    val tacTarget = tacTargetToByteCodePcs(tacTargetToByteCodePcsIndex)._1
+    val byteCodeTarget = tacTargetToByteCodePcs(tacTarget)._2
+    byteCodeTarget
+  }
+
+  def directAssociationExists(tacTargetToByteCodePcs: ArrayBuffer[(Int, Int)], tacTarget: Int, bytecodePC: Int): Boolean = {
+    tacTargetToByteCodePcs.exists { case (tacGoto, bcPC) => (tacGoto, bcPC) == (tacTarget, bytecodePC) }
   }
 
   def main(args: Array[String]): Unit = {
