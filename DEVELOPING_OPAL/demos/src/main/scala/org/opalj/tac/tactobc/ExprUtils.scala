@@ -3,9 +3,9 @@ package org.opalj.tac.tactobc
 
 import org.opalj.BinaryArithmeticOperators.{Add, And, Divide, Modulo, Multiply, Or, ShiftLeft, ShiftRight, Subtract, UnsignedShiftRight, XOr}
 import org.opalj.br.{ComputationalTypeDouble, ComputationalTypeFloat, ComputationalTypeInt, ComputationalTypeLong, ComputationalTypeReference}
-import org.opalj.br.instructions.{ALOAD, ALOAD_0, ALOAD_1, ALOAD_2, ALOAD_3, ASTORE, ASTORE_0, ASTORE_1, ASTORE_2, ASTORE_3, BIPUSH, DADD, DCONST_0, DCONST_1, DDIV, DLOAD, DLOAD_0, DLOAD_1, DLOAD_2, DLOAD_3, DMUL, DREM, DSTORE, DSTORE_0, DSTORE_1, DSTORE_2, DSTORE_3, DSUB, FADD, FCONST_0, FCONST_1, FCONST_2, FDIV, FLOAD, FLOAD_0, FLOAD_1, FLOAD_2, FLOAD_3, FMUL, FREM, FSTORE, FSTORE_0, FSTORE_1, FSTORE_2, FSTORE_3, FSUB, GETFIELD, GETSTATIC, IADD, IAND, ICONST_0, ICONST_1, ICONST_2, ICONST_3, ICONST_4, ICONST_5, ICONST_M1, IDIV, ILOAD, ILOAD_0, ILOAD_1, ILOAD_2, ILOAD_3, IMUL, IOR, IREM, ISHL, ISHR, ISTORE, ISTORE_0, ISTORE_1, ISTORE_2, ISTORE_3, ISUB, IUSHR, IXOR, Instruction, LADD, LAND, LCONST_0, LCONST_1, LDIV, LLOAD, LLOAD_0, LLOAD_1, LLOAD_2, LLOAD_3, LMUL, LOR, LREM, LSHL, LSHR, LSTORE, LSTORE_0, LSTORE_1, LSTORE_2, LSTORE_3, LSUB, LUSHR, LXOR, LoadClass, LoadDouble, LoadFloat, LoadInt, LoadLong, LoadMethodHandle, LoadMethodType, LoadString, SIPUSH}
+import org.opalj.br.instructions.{ALOAD, ALOAD_0, ALOAD_1, ALOAD_2, ALOAD_3, ASTORE, ASTORE_0, ASTORE_1, ASTORE_2, ASTORE_3, BIPUSH, DADD, DCONST_0, DCONST_1, DDIV, DLOAD, DLOAD_0, DLOAD_1, DLOAD_2, DLOAD_3, DMUL, DREM, DSTORE, DSTORE_0, DSTORE_1, DSTORE_2, DSTORE_3, DSUB, FADD, FCONST_0, FCONST_1, FCONST_2, FDIV, FLOAD, FLOAD_0, FLOAD_1, FLOAD_2, FLOAD_3, FMUL, FREM, FSTORE, FSTORE_0, FSTORE_1, FSTORE_2, FSTORE_3, FSUB, GETFIELD, GETSTATIC, IADD, IAND, ICONST_0, ICONST_1, ICONST_2, ICONST_3, ICONST_4, ICONST_5, ICONST_M1, IDIV, ILOAD, ILOAD_0, ILOAD_1, ILOAD_2, ILOAD_3, IMUL, INVOKEINTERFACE, INVOKESTATIC, INVOKEVIRTUAL, IOR, IREM, ISHL, ISHR, ISTORE, ISTORE_0, ISTORE_1, ISTORE_2, ISTORE_3, ISUB, IUSHR, IXOR, Instruction, LADD, LAND, LCONST_0, LCONST_1, LDIV, LLOAD, LLOAD_0, LLOAD_1, LLOAD_2, LLOAD_3, LMUL, LOR, LREM, LSHL, LSHR, LSTORE, LSTORE_0, LSTORE_1, LSTORE_2, LSTORE_3, LSUB, LUSHR, LXOR, LoadClass, LoadDouble, LoadFloat, LoadInt, LoadLong, LoadMethodHandle, LoadMethodType, LoadString, SIPUSH}
 import org.opalj.bytecode.BytecodeProcessingFailedException
-import org.opalj.tac.{BinaryExpr, ClassConst, Const, DVar, DoubleConst, Expr, FloatConst, GetField, GetStatic, IntConst, LongConst, MethodHandleConst, MethodTypeConst, StringConst, UVar, Var}
+import org.opalj.tac.{BinaryExpr, ClassConst, Const, DVar, DoubleConst, Expr, FloatConst, GetField, GetStatic, IntConst, LongConst, MethodHandleConst, MethodTypeConst, StaticFunctionCall, StringConst, UVar, Var, VirtualFunctionCall}
 
 import scala.collection.mutable
 import scala.collection.mutable.ArrayBuffer
@@ -19,9 +19,35 @@ object ExprUtils {
       case variable: Var[_] => loadVariable(variable, instructionsWithPCs, currentPC)
       case fieldExpr: Expr[_] if fieldExpr.isInstanceOf[GetField[_]] || fieldExpr.isInstanceOf[GetStatic] => handleFieldAccess(fieldExpr, instructionsWithPCs, currentPC)
       case binaryExpr: BinaryExpr[_] => handleBinaryExpr(binaryExpr, instructionsWithPCs, currentPC)
+      case virtualFunctionCallExpr: VirtualFunctionCall[_] => handleVirtualFunctionCall(virtualFunctionCallExpr, instructionsWithPCs, currentPC)
+      case staticFunctionCallExpr: StaticFunctionCall[_] => handleStaticFunctionCall(staticFunctionCallExpr, instructionsWithPCs, currentPC)
       case _ =>
         throw new UnsupportedOperationException("Unsupported expression type" + expr)
     }
+  }
+
+  def handleStaticFunctionCall(expr: StaticFunctionCall[_], instructionsWithPCs: ArrayBuffer[(Int, Instruction)], currentPC: Int): Int = {
+    val instruction = if (expr.isInterface) {
+      INVOKEINTERFACE(expr.declaringClass, expr.name, expr.descriptor)
+      throw new UnsupportedOperationException("Unsupported expression type" + expr)
+    } else {
+      INVOKESTATIC(expr.declaringClass, expr.isInterface, expr.name, expr.descriptor)
+    }
+
+    instructionsWithPCs += ((currentPC, instruction))
+    currentPC + instruction.length
+  }
+
+  def handleVirtualFunctionCall(expr: VirtualFunctionCall[_], instructionsWithPCs: ArrayBuffer[(Int, Instruction)], currentPC: Int): Int = {
+    val instruction = if (expr.isInterface) {
+      //INVOKEINTERFACE(expr.declaringClass, expr.name, expr.descriptor)
+      throw new UnsupportedOperationException("Unsupported expression type" + expr)
+    } else {
+      INVOKEVIRTUAL(expr.declaringClass, expr.name, expr.descriptor)
+    }
+
+    instructionsWithPCs += ((currentPC, instruction))
+    currentPC + instruction.length
   }
 
   private def loadConstant(constExpr: Const, instructionsWithPCs: ArrayBuffer[(Int, Instruction)], currentPC: Int): Int = {
@@ -87,25 +113,6 @@ object ExprUtils {
       })
   }
 
- /*private def handleUVarName(uVar: UVar[_]): String = {
-   val isInterval = uVar.defSites.size > 1
-    if(isInterval) {
-      val variableName = uVar.name.drop(1).dropRight(6)
-      variableName
-    } else {
-      ""
-    }
-  }*/
-
-  /*private def handleDVarName(dVar: Var[_]): String = {
-    val isInterval = dVar.asVar.asInstanceOf[DVar[_]].useSites.size > 1
-    if(isInterval) {
-      dVar.name
-    } else {
-      ""
-    }
-  }*/
-
   def getVariableLvl(variable: Var[_]): Int = {
     val result = variable match {
       case uVar: UVar[_] => uVar.definedBy.toList.head
@@ -116,10 +123,6 @@ object ExprUtils {
   }
 
   def loadVariable(variable: Var[_], instructionsWithPCs: ArrayBuffer[(Int, Instruction)], currentPC: Int): Int = {
-    /*val variableName = variable match {
-      case uVar: UVar[_] => handleUVarName(uVar)
-      case _ => variable.name.drop(1).dropRight(1)
-    }*/
     val index = getVariableLvlIndex(variable)
       val instruction = variable.cTpe match {
         case ComputationalTypeInt => index match {

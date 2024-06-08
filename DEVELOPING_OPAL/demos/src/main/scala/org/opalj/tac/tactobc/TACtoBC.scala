@@ -3,7 +3,7 @@ package org.opalj.tac.tactobc
 
 import org.opalj.br.Method
 import org.opalj.br.analyses.Project
-import org.opalj.br.instructions.{GOTO, IFGT, IFLT, IF_ICMPGE, IF_ICMPLE, Instruction, RETURN}
+import org.opalj.br.instructions.{GOTO, IFGT, IFLT, IF_ICMPGE, IF_ICMPLE, Instruction}
 import org.opalj.tac._
 import org.opalj.value.ValueInformation
 
@@ -102,28 +102,31 @@ object TACtoBC {
     val tacTargetToByteCodePcs = ArrayBuffer[(Int, Int)]()
     //first pass
     val tacStmts = tac.stmts.zipWithIndex
-    tacStmts.foreach { case (stmt, index) =>
+    tacStmts.foreach { case (stmt, _) =>
       stmt match {
-        case Assignment(pc, targetVar, expr) =>
+        case Assignment(_, targetVar, expr) =>
           tacTargetToByteCodePcs += ((-1, currentPC))
           currentPC = StmtProcessor.processAssignment(targetVar, expr, generatedByteCodeWithPC, currentPC)
-        case ExprStmt(pc, expr) =>
+        case ExprStmt(_, expr) =>
           tacTargetToByteCodePcs += ((-1, currentPC))
           currentPC = ExprUtils.processExpression(expr, generatedByteCodeWithPC, currentPC)
-        case If(pc, left, condition, right, target) =>
+        case If(_, left, condition, right, target) =>
           tacTargetToByteCodePcs += ((target, currentPC))
           currentPC = StmtProcessor.processIf(left, condition, right, target, generatedByteCodeWithPC, currentPC)
-        case Goto(pc, target) =>
+        case Goto(_, target) =>
           tacTargetToByteCodePcs += ((target, currentPC))
           currentPC = StmtProcessor.processGoto(generatedByteCodeWithPC, currentPC)
+        case Switch(_, defaultTarget, index, npairs) =>
+
         case VirtualMethodCall(_, declaringClass, isInterface, name, descriptor, receiver, params) =>
           tacTargetToByteCodePcs += ((-1, currentPC))
           currentPC = StmtProcessor.processVirtualMethodCall(declaringClass, isInterface, name, descriptor, receiver, params, generatedByteCodeWithPC, currentPC)
+        case ReturnValue(_, expr) =>
+          tacTargetToByteCodePcs += ((-1, currentPC))
+          currentPC = StmtProcessor.processReturnValue(expr, generatedByteCodeWithPC, currentPC)
         case Return(_) =>
           tacTargetToByteCodePcs += ((-1, currentPC))
-          val instruction = RETURN
-          generatedByteCodeWithPC += ((currentPC, instruction))
-          currentPC += instruction.length
+          currentPC = StmtProcessor.processReturn(generatedByteCodeWithPC, currentPC)
         case _ =>
       }
     }
@@ -170,8 +173,6 @@ object TACtoBC {
     }
     result
   }
-
-
 
   def updateBranchTargets(tacTargetToByteCodePcs: ArrayBuffer[(Int, Int)], tacTargetToByteCodePcsIndex: Int): Int = {
     val tacTarget = tacTargetToByteCodePcs(tacTargetToByteCodePcsIndex)._1
