@@ -4,8 +4,8 @@ package org.opalj.tac.tactobc
 import org.opalj.RelationalOperator
 import org.opalj.RelationalOperators._
 import org.opalj.br.{MethodDescriptor, ReferenceType}
-import org.opalj.br.instructions.{GOTO, IFEQ, IFGE, IFGT, IFLE, IFLT, IFNE, IFNONNULL, IFNULL, IF_ICMPEQ, IF_ICMPGE, IF_ICMPGT, IF_ICMPLE, IF_ICMPLT, IF_ICMPNE, INVOKEVIRTUAL, Instruction}
-import org.opalj.tac.{Expr, IntConst, Var}
+import org.opalj.br.instructions.{GOTO, IFNONNULL, IFNULL, IF_ICMPEQ, IF_ICMPGE, IF_ICMPGT, IF_ICMPLE, IF_ICMPLT, IF_ICMPNE, INVOKEVIRTUAL, Instruction}
+import org.opalj.tac.{Expr, Var}
 
 import scala.collection.mutable.ArrayBuffer
 
@@ -47,38 +47,11 @@ object StmtProcessor {
 
   def generateIfInstruction(left: Expr[_], condition: RelationalOperator, right: Expr[_], instructionsWithPCs: ArrayBuffer[(Int, Instruction)], currentPC: Int, rightPC: Int): Int = {
     val instruction = (left, right) match {
-      case (IntConst(_, 0), _) | (_, IntConst(_, 0)) =>
-        condition match {
-          //
-          // Operators to compare int values.
-          //
-          case LT  => IFLT(-1)
-          case GT  => IFGT(-1)
-          case LE  => IFLE(-1)
-          case GE  => IFGE(-1)
-          //
-          // Operators to compare int and reference values.
-          //
-          case EQ  => IFEQ(-1)
-          case NE  => IFNE(-1)
-          //
-          // Operators to compare floating point numbers.
-          //
-          //ToDo: find out the difference
-          /*case CMPG =>
-          case CMPL =>
-          //
-          // Operators to compare long values.
-          //
-          case CMP =>
-         */
-          case _ => IFNE(-1)//throw new UnsupportedOperationException(s"Unsupported condition: $condition")
-        }
       case _ if right.isNullExpr || left.isNullExpr =>
         condition match {
           case EQ  => IFNULL(-1)
           case NE  => IFNONNULL(-1)
-          case _ => IFNE(-1)//throw new UnsupportedOperationException(s"Unsupported condition: $condition")
+          case _ => throw new UnsupportedOperationException(s"Unsupported condition: $condition")
         }
       case _ =>
         condition match {
@@ -87,8 +60,7 @@ object StmtProcessor {
           case LT  => IF_ICMPLT(-1)
           case LE  => IF_ICMPLE(-1)
           case GT  => IF_ICMPGT(-1)
-          case GE  => println(s"instruction ${IF_ICMPGE(-1)}")
-                      IF_ICMPGE(-1)
+          case GE  => IF_ICMPGE(-1)
           case _ => throw new UnsupportedOperationException(s"Unsupported condition: $condition")
         }
           /*case EQ => IF_ACMPEQ(-1)
