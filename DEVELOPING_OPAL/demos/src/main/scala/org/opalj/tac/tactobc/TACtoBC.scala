@@ -185,13 +185,11 @@ object TACtoBC {
           case GOTO(-1) =>
             GOTO(updateBranchTargets(tacTargetToByteCodePcs, tacTargetToByteCodePcsIndex))
           case LOOKUPSWITCH(defaultOffset, matchOffsets) =>
-            tacTargetToByteCodePcsIndex -= 1
             val updatedMatchOffsets = matchOffsets.map { case IntIntPair(caseValue, _) =>
               val tacTarget = findTacTarget(switchCases, caseValue)
               IntIntPair(caseValue, updateSwitchTargets(tacTargetToByteCodePcs, tacTarget))
             }
             val updatedDefaultOffset = updateSwitchTargets(tacTargetToByteCodePcs, defaultOffset)
-            tacTargetToByteCodePcsIndex += 1
             LOOKUPSWITCH(updatedDefaultOffset, updatedMatchOffsets)
           case TABLESWITCH(defaultOffset, low, high, jumpOffsets) =>
             val updatedJumpOffsets = jumpOffsets.zipWithIndex.map { case (_, index) =>
