@@ -128,6 +128,12 @@ object TACtoBC {
         case VirtualMethodCall(_, declaringClass, isInterface, name, descriptor, receiver, params) =>
           tacTargetToByteCodePcs += ((-1, currentPC))
           currentPC = StmtProcessor.processVirtualMethodCall(declaringClass, isInterface, name, descriptor, receiver, params, generatedByteCodeWithPC, currentPC)
+        case NonVirtualMethodCall(_, declaringClass, isInterface, name, descriptor, receiver, params) =>
+          tacTargetToByteCodePcs += ((-1, currentPC))
+          currentPC = StmtProcessor.processNonVirtualMethodCall(declaringClass, isInterface, name, descriptor, receiver, params, generatedByteCodeWithPC, currentPC)
+        case StaticMethodCall(_, declaringClass, isInterface, name, descriptor, params) =>
+          tacTargetToByteCodePcs += ((-1, currentPC))
+          currentPC = StmtProcessor.processStaticMethodCall(declaringClass, isInterface, name, descriptor, params, generatedByteCodeWithPC, currentPC)
         case ReturnValue(_, expr) =>
           tacTargetToByteCodePcs += ((-1, currentPC))
           currentPC = StmtProcessor.processReturnValue(expr, generatedByteCodeWithPC, currentPC)

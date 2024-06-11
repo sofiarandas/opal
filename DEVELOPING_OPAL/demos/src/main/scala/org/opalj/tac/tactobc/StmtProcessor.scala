@@ -3,8 +3,8 @@ package org.opalj.tac.tactobc
 
 import org.opalj.RelationalOperator
 import org.opalj.RelationalOperators._
-import org.opalj.br.{ComputationalTypeDouble, ComputationalTypeFloat, ComputationalTypeInt, ComputationalTypeLong, MethodDescriptor, ReferenceType}
-import org.opalj.br.instructions.{ARETURN, FRETURN, GOTO, IFNONNULL, IFNULL, IF_ICMPEQ, IF_ICMPGE, IF_ICMPGT, IF_ICMPLE, IF_ICMPLT, IF_ICMPNE, INVOKEVIRTUAL, IRETURN, Instruction, LOOKUPSWITCH, LRETURN, RETURN, TABLESWITCH}
+import org.opalj.br.{ComputationalTypeDouble, ComputationalTypeFloat, ComputationalTypeInt, ComputationalTypeLong, ComputationalTypeReference, MethodDescriptor, ObjectType, ReferenceType}
+import org.opalj.br.instructions.{ARETURN, DRETURN, FRETURN, GOTO, IFNONNULL, IFNULL, IF_ICMPEQ, IF_ICMPGE, IF_ICMPGT, IF_ICMPLE, IF_ICMPLT, IF_ICMPNE, INVOKESPECIAL, INVOKESTATIC, INVOKEVIRTUAL, IRETURN, Instruction, LOOKUPSWITCH, LRETURN, RETURN, TABLESWITCH}
 import org.opalj.collection.immutable.IntIntPair
 import org.opalj.tac.{Expr, UVar, Var}
 
@@ -88,7 +88,8 @@ object StmtProcessor {
       case ComputationalTypeInt => IRETURN
       case ComputationalTypeLong => LRETURN
       case ComputationalTypeFloat => FRETURN
-      case ComputationalTypeDouble => ARETURN
+      case ComputationalTypeDouble => DRETURN
+      case ComputationalTypeReference => ARETURN
       case _ => throw new UnsupportedOperationException("Unsupported computational type:" + expr.cTpe)
     }
     val offsetPC = currentPC + (afterExprPC - currentPC)
@@ -101,6 +102,18 @@ object StmtProcessor {
       INVOKEINTERFACE
     }else*/
       INVOKEVIRTUAL(declaringClass, methodName, methodDescriptor)
+    instructionsWithPCs += ((currentPC, instruction))
+    currentPC + instruction.length
+  }
+
+  def processNonVirtualMethodCall(declaringClass: ObjectType, isInterface: Boolean, methodName: String, methodDescriptor: MethodDescriptor, receiver: Expr[_], params: Seq[Expr[_]], instructionsWithPCs: ArrayBuffer[(Int, Instruction)], currentPC: Int): Int = {
+    val instruction = INVOKESPECIAL(declaringClass, isInterface, methodName, methodDescriptor)
+    instructionsWithPCs += ((currentPC, instruction))
+    currentPC + instruction.length
+  }
+
+  def processStaticMethodCall(declaringClass: ObjectType, isInterface: Boolean, methodName: String, methodDescriptor: MethodDescriptor, params: Seq[Expr[_]], instructionsWithPCs: ArrayBuffer[(Int, Instruction)], currentPC: Int): Int = {
+    val instruction = INVOKESTATIC(declaringClass, isInterface, methodName, methodDescriptor)
     instructionsWithPCs += ((currentPC, instruction))
     currentPC + instruction.length
   }
