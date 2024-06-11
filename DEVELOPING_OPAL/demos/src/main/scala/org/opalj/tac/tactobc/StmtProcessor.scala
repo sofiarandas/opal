@@ -4,9 +4,9 @@ package org.opalj.tac.tactobc
 import org.opalj.RelationalOperator
 import org.opalj.RelationalOperators._
 import org.opalj.br.{ComputationalTypeDouble, ComputationalTypeFloat, ComputationalTypeInt, ComputationalTypeLong, MethodDescriptor, ReferenceType}
-import org.opalj.br.instructions.{ARETURN, FRETURN, GOTO, IFNONNULL, IFNULL, IF_ICMPEQ, IF_ICMPGE, IF_ICMPGT, IF_ICMPLE, IF_ICMPLT, IF_ICMPNE, INVOKEVIRTUAL, IRETURN, Instruction, LRETURN, RETURN}
+import org.opalj.br.instructions.{ARETURN, FRETURN, GOTO, IFNONNULL, IFNULL, IF_ICMPEQ, IF_ICMPGE, IF_ICMPGT, IF_ICMPLE, IF_ICMPLT, IF_ICMPNE, INVOKEVIRTUAL, IRETURN, Instruction, LOOKUPSWITCH, LRETURN, RETURN, TABLESWITCH}
 import org.opalj.collection.immutable.IntIntPair
-import org.opalj.tac.{Expr, Var}
+import org.opalj.tac.{Expr, UVar, Var}
 
 import scala.collection.immutable.ArraySeq
 import scala.collection.mutable.ArrayBuffer
@@ -23,13 +23,58 @@ object StmtProcessor {
     finalPC
   }
 
-  /*def processSwitch(defaultTarget: Int, index: Expr[_], npairs: ArraySeq[IntIntPair /*(Case Value, Jump Target)*/]): Int = {
-    val bCnpairs = ArraySeq[IntIntPair](npairs.size)
-    npairs.foreach { (, _2)
-      bCnpairs += ()
+  def processSwitch(defaultOffset: Int, index: Expr[_], npairs: ArraySeq[IntIntPair /*(Case Value, Jump Target)*/], instructionsWithPCs: ArrayBuffer[(Int, Instruction)], currentPC: Int): Int = {
+    // Translate the index expression first
+    val afterExprPC = ExprUtils.processExpression(index, instructionsWithPCs, currentPC)
+
+    // Prepare the bytecode pairs with placeholders for targets
+    val bCnpairs = prepareBCnpairs(npairs)
+
+    if (isLookupSwitch(index)) {
+      // Add LOOKUPSWITCH instruction with placeholders for targets
+      val lookupswitchInstruction = LOOKUPSWITCH(defaultOffset, bCnpairs)
+      instructionsWithPCs += ((afterExprPC, lookupswitchInstruction))
+      afterExprPC + lookupSwitchLength(bCnpairs.size, afterExprPC)
+    } else {
+      // Add TABLESWITCH instruction with placeholders for targets
+      val minValue = bCnpairs.minBy(_._1)._1
+      val maxValue = bCnpairs.maxBy(_._1)._1
+      val jumpTable = ArrayBuffer.fill(maxValue - minValue + 1)(-1)
+
+      // Set the case values in the jump table
+      bCnpairs.foreach { case IntIntPair(caseValue, _) =>
+        jumpTable(caseValue - minValue) = -1
+      }
+
+      val tableswitchInstruction = TABLESWITCH(defaultOffset, minValue, maxValue, jumpTable.to(ArraySeq))
+      instructionsWithPCs += ((afterExprPC, tableswitchInstruction))
+      afterExprPC + tableSwitchLength(minValue, maxValue, afterExprPC)
     }
-    1
-  }*/
+  }
+
+  def lookupSwitchLength(numPairs: Int, currentPC: Int): Int = {
+    // Opcode (1 byte) + padding (0-3 bytes) + default offset (4 bytes) + number of pairs (4 bytes) + pairs (8 bytes each)
+    val padding = (4 - (currentPC % 4)) % 4
+    1 + padding + 4 + 4 + (numPairs * 8)
+  }
+
+  def tableSwitchLength(low: Int, high: Int, currentPC: Int): Int = {
+    // Opcode (1 byte) + padding (0-3 bytes) + default offset (4 bytes) + low value (4 bytes) + high value (4 bytes) + jump offsets (4 bytes each)
+    val padding = (4 - (currentPC % 4)) % 4
+    val numOffsets = high - low + 1
+    1 + padding + 4 + 4 + 4 + (numOffsets * 4)
+  }
+
+  def prepareBCnpairs(npairs: ArraySeq[IntIntPair]): ArraySeq[IntIntPair] = {
+    npairs.map { case IntIntPair(caseValue, _) => IntIntPair(caseValue, -1) }
+  }
+
+  def isLookupSwitch(index: Expr[_]): Boolean = {
+    index match {
+      case variable: UVar[_] => variable.defSites.size == 1
+      case _ => false
+    }
+  }
 
   def processReturn(instructionsWithPCs: ArrayBuffer[(Int, Instruction)], currentPC: Int): Int = {
     val instruction = RETURN

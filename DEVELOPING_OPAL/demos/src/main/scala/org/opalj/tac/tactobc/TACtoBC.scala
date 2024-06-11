@@ -3,11 +3,13 @@ package org.opalj.tac.tactobc
 
 import org.opalj.br.Method
 import org.opalj.br.analyses.Project
-import org.opalj.br.instructions.{GOTO, IFGT, IFLT, IF_ICMPGE, IF_ICMPLE, Instruction}
+import org.opalj.br.instructions.{GOTO, IF_ICMPEQ, IF_ICMPGE, IF_ICMPGT, IF_ICMPLE, IF_ICMPLT, IF_ICMPNE, Instruction, LOOKUPSWITCH, TABLESWITCH}
+import org.opalj.collection.immutable.IntIntPair
 import org.opalj.tac._
 import org.opalj.value.ValueInformation
 
 import java.io.File
+import scala.collection.immutable.ArraySeq
 import scala.collection.mutable.ArrayBuffer
 
 object TACtoBC {
@@ -100,6 +102,7 @@ object TACtoBC {
     val generatedByteCodeWithPC = ArrayBuffer[(Int, Instruction)]()
     var currentPC = 0
     val tacTargetToByteCodePcs = ArrayBuffer[(Int, Int)]()
+    val switchCases = ArrayBuffer[(Int, Int)]() // To store switch case targets
     //first pass
     val tacStmts = tac.stmts.zipWithIndex
     tacStmts.foreach { case (stmt, _) =>
@@ -117,7 +120,11 @@ object TACtoBC {
           tacTargetToByteCodePcs += ((target, currentPC))
           currentPC = StmtProcessor.processGoto(generatedByteCodeWithPC, currentPC)
         case Switch(_, defaultTarget, index, npairs) =>
-
+          npairs.foreach { pair =>
+            switchCases += ((pair._1, pair._2))//case values to jump target
+          }
+          tacTargetToByteCodePcs += ((defaultTarget, currentPC))
+          currentPC = StmtProcessor.processSwitch(defaultTarget, index, npairs, generatedByteCodeWithPC, currentPC)
         case VirtualMethodCall(_, declaringClass, isInterface, name, descriptor, receiver, params) =>
           tacTargetToByteCodePcs += ((-1, currentPC))
           currentPC = StmtProcessor.processVirtualMethodCall(declaringClass, isInterface, name, descriptor, receiver, params, generatedByteCodeWithPC, currentPC)
@@ -139,19 +146,19 @@ object TACtoBC {
       case ((pc, instruction), _) =>
         // Match and update branch instructions
         val updatedInstruction = instruction match {
-          case IFLT(-1) =>
+          case IF_ICMPEQ(-1) =>
             tacTargetToByteCodePcsIndex -= 1
-            val instruction = IFLT(updateBranchTargets(tacTargetToByteCodePcs, tacTargetToByteCodePcsIndex))
+            val instruction = IF_ICMPEQ(updateBranchTargets(tacTargetToByteCodePcs, tacTargetToByteCodePcsIndex))
             tacTargetToByteCodePcsIndex += 1
             instruction
-          case IFGT(-1) =>
+          case IF_ICMPNE(-1) =>
             tacTargetToByteCodePcsIndex -= 1
-            val instruction = IFGT(updateBranchTargets(tacTargetToByteCodePcs, tacTargetToByteCodePcsIndex))
+            val instruction = IF_ICMPNE(updateBranchTargets(tacTargetToByteCodePcs, tacTargetToByteCodePcsIndex))
             tacTargetToByteCodePcsIndex += 1
             instruction
-          case IF_ICMPGE(-1) =>
+          case IF_ICMPLT(-1) =>
             tacTargetToByteCodePcsIndex -= 1
-            val instruction = IF_ICMPGE(updateBranchTargets(tacTargetToByteCodePcs, tacTargetToByteCodePcsIndex))
+            val instruction = IF_ICMPLT(updateBranchTargets(tacTargetToByteCodePcs, tacTargetToByteCodePcsIndex))
             tacTargetToByteCodePcsIndex += 1
             instruction
           case IF_ICMPLE(-1) =>
@@ -159,8 +166,32 @@ object TACtoBC {
             val instruction = IF_ICMPLE(updateBranchTargets(tacTargetToByteCodePcs, tacTargetToByteCodePcsIndex))
             tacTargetToByteCodePcsIndex += 1
             instruction
+          case IF_ICMPGT(-1) =>
+            tacTargetToByteCodePcsIndex -= 1
+            val instruction = IF_ICMPGT(updateBranchTargets(tacTargetToByteCodePcs, tacTargetToByteCodePcsIndex))
+            tacTargetToByteCodePcsIndex += 1
+            instruction
+          case IF_ICMPGE(-1) =>
+            tacTargetToByteCodePcsIndex -= 1
+            val instruction = IF_ICMPGE(updateBranchTargets(tacTargetToByteCodePcs, tacTargetToByteCodePcsIndex))
+            tacTargetToByteCodePcsIndex += 1
+            instruction
           case GOTO(-1) =>
             GOTO(updateBranchTargets(tacTargetToByteCodePcs, tacTargetToByteCodePcsIndex))
+          case LOOKUPSWITCH(defaultOffset, matchOffsets) =>
+            tacTargetToByteCodePcsIndex -= 1
+            val updatedMatchOffsets = matchOffsets.map { case IntIntPair(caseValue, _) =>
+              val tacTarget = findTacTarget(switchCases, caseValue)
+              IntIntPair(caseValue, updateSwitchTargets(tacTargetToByteCodePcs, tacTarget))
+            }
+            val updatedDefaultOffset = updateSwitchTargets(tacTargetToByteCodePcs, defaultOffset)
+            tacTargetToByteCodePcsIndex += 1
+            LOOKUPSWITCH(updatedDefaultOffset, updatedMatchOffsets)
+          case TABLESWITCH(defaultOffset, low, high, jumpOffsets) =>
+            val updatedJumpOffsets = jumpOffsets.zipWithIndex.map { case (_, index) =>
+              updateBranchTargets(switchCases, low + index)
+            }
+            TABLESWITCH(defaultOffset, low, high, updatedJumpOffsets.to(ArraySeq))
           case _ =>
             instruction
         }
@@ -174,8 +205,18 @@ object TACtoBC {
     result
   }
 
+  def findTacTarget(npairs: ArrayBuffer[(Int, Int)], caseValue: Int): Int = {
+    val tacTarget = npairs.find(_._1 == caseValue).map(_._2).get
+    tacTarget
+  }
+
   def updateBranchTargets(tacTargetToByteCodePcs: ArrayBuffer[(Int, Int)], tacTargetToByteCodePcsIndex: Int): Int = {
     val tacTarget = tacTargetToByteCodePcs(tacTargetToByteCodePcsIndex)._1
+    val byteCodeTarget = tacTargetToByteCodePcs(tacTarget)._2
+    byteCodeTarget
+  }
+
+  def updateSwitchTargets(tacTargetToByteCodePcs: ArrayBuffer[(Int, Int)], tacTarget: Int): Int = {
     val byteCodeTarget = tacTargetToByteCodePcs(tacTarget)._2
     byteCodeTarget
   }
