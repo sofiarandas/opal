@@ -1,10 +1,29 @@
 /* BSD 2-Clause License - see OPAL/LICENSE for details. */
 package org.opalj.tac.tactobc
 
-import org.opalj.br.Method
+//import org.opalj.ba.toDA
+//import org.opalj.bc.Assembler
+import org.opalj.ba.toDA
+import org.opalj.bc.Assembler
+import org.opalj.br.{Code, Method}
 import org.opalj.br.analyses.Project
 import org.opalj.br.instructions.{GOTO, IF_ICMPEQ, IF_ICMPGE, IF_ICMPGT, IF_ICMPLE, IF_ICMPLT, IF_ICMPNE, Instruction, LOOKUPSWITCH, TABLESWITCH}
+import org.opalj.br.reader.Java8Framework
 import org.opalj.collection.immutable.IntIntPair
+import org.opalj.da.ClassFileReader.ClassFile
+import org.opalj.io.writeAndOpen
+
+import java.io.ByteArrayInputStream
+import java.nio.file.{Files, Paths}
+//import org.opalj.da.ClassFileReader.ClassFile
+//import org.opalj.io.writeAndOpen
+//import org.opalj.util.InMemoryClassLoader
+
+//import java.io.ByteArrayInputStream
+//import java.nio.file.Paths
+
+//import org.opalj.da.ClassFileReader.ClassFile
+//import org.opalj.io.writeAndOpen
 import org.opalj.tac._
 import org.opalj.value.ValueInformation
 
@@ -13,6 +32,122 @@ import scala.collection.immutable.ArraySeq
 import scala.collection.mutable.ArrayBuffer
 
 object TACtoBC {
+
+   def main(args: Array[String]): Unit = {
+    if (args.length != 1) {
+      println("Usage: TACtoBC <path to class or jar file>")
+      return
+    }
+
+    val file = new File(args(0))
+    if (!file.exists()) {
+      println(s"File ${file.getPath} does not exist.")
+      return
+    }
+
+    compileByteCode(file)
+
+    val tacs = compileTAC(file)
+
+    // Print out TAC
+    tacs.foreach { case (method, tac) =>
+      tac.detach()
+      println(s"Method: ${method.toJava}")
+      println(tac.toString)
+      println("\n")
+
+    }
+
+    // Print out the translation from TAC to Bytecode
+    val byteCodes = translateTACtoBC(tacs)
+    byteCodes.foreach { case (method, bytecode) =>
+      println(s"Method: ${method.toJava}")
+      bytecode.foreach(instr => println(instr.toString))
+    }
+
+    //todo: fill array of instructions with nulls
+    /*val byteCodesWithNulls = byteCodes.foreach{ case (method, bytecode) =>
+      val bytecodeArrayWithNulls = new Array[Instruction](bytecode.last._1)
+      val index = 0
+      while(index < bytecodeArrayWithNulls.length) {
+        val instruction = byteCodes.get(method).get
+        if(index.==(b)){
+
+        }
+      }
+    }*/
+
+   // val TheType = ObjectType("/org/opalj/ba/testingTAC/HelloWorldToString")
+
+    val in = () => this.getClass.getResourceAsStream("/org/opalj/ba/testingTAC/HelloWorldToString.class")
+    val cf = Java8Framework.ClassFile(in).head
+    val newMethods =
+      for (m <- cf.methods) yield {
+        m.body match {
+          case None =>
+            m.copy() // methods which are native and abstract ...
+          case Some(originalBody) =>
+            //refactor to map.get(m)
+            byteCodes.find(bc => bc._1.name.contains(m.name)) match {
+              case Some((_, instructions)) =>
+                // Prepare new instructions array with null values where necessary
+                val maxPc = instructions.map(_._1).max
+                val newInstructionsWithNulls = new Array[Instruction](maxPc + 1)
+
+                // Initialize array with nulls
+                for (i <- newInstructionsWithNulls.indices) {
+                  newInstructionsWithNulls(i) = null
+                }
+
+                // Fill in actual instructions
+                for ((pc, instruction) <- instructions) {
+                  newInstructionsWithNulls(pc) = instruction
+                }
+
+                // Debugging: Print the instructions being passed to the new Code object
+                println(s"Original Instructions for ${m.name}: ${originalBody.instructions.mkString(", ")}")
+                println(s"New Instructions for ${m.name}: ${newInstructionsWithNulls.mkString(", ")}")
+
+                val newBody = Code(
+                  originalBody.maxStack,
+                  originalBody.maxLocals,
+                  newInstructionsWithNulls,
+                  originalBody.exceptionHandlers,
+                  originalBody.attributes)
+
+                println(s"New body for method ${m.name}: $newBody")
+
+                val result = m.copy(body = Some(newBody))
+
+               /* val it = result.body.get.iterator
+                val n = it.next()
+                val n1 = it.next()
+                print(n.toString + n1.toString)*/
+
+                result
+              case None =>
+                println(s"Warning: No bytecode found for method ${m.name}. Keeping original method body.")
+                m.copy()
+            }
+        }
+      }
+     val newRawCF = Assembler(toDA(cf.copy(methods = newMethods)))
+     val packagePath = Paths.get("/opalj/ba/testingTAC/")
+     Files.createDirectories(packagePath)
+     val firstRunnableClass = packagePath.resolve("HelloWorldToStringsofff.class")
+     println("Created class file: " + Files.write(firstRunnableClass, newRawCF).toAbsolutePath)
+
+     // Let's see the old class file...
+     val odlCFHTML = ClassFile(in).head.toXHTML(None)
+     val oldCFHTMLFile = writeAndOpen(odlCFHTML, "HelloWorldToString", ".html")
+     println("original: " + oldCFHTMLFile)
+
+     // Let's see the new class file...
+     val newCF = ClassFile(() => new ByteArrayInputStream(newRawCF)).head.toXHTML(None)
+     println("instrumented: " + writeAndOpen(newCF, "NewHelloWorldToString", ".html"))
+
+    //println("Class file GeneratedHelloWorldToStringDALEQUEE.class has been generated." + newClass)
+  }
 
   /**
    * Compiles the Three-Address Code (TAC) representation for all methods in the given .class file.
@@ -121,7 +256,7 @@ object TACtoBC {
           currentPC = StmtProcessor.processGoto(generatedByteCodeWithPC, currentPC)
         case Switch(_, defaultTarget, index, npairs) =>
           npairs.foreach { pair =>
-            switchCases += ((pair._1, pair._2))//case values to jump target
+            switchCases += ((pair._1, pair._2)) //case values to jump target
           }
           tacTargetToByteCodePcs += ((defaultTarget, currentPC))
           currentPC = StmtProcessor.processSwitch(defaultTarget, index, npairs, generatedByteCodeWithPC, currentPC)
@@ -229,39 +364,5 @@ object TACtoBC {
 
   def directAssociationExists(tacTargetToByteCodePcs: ArrayBuffer[(Int, Int)], tacTarget: Int, bytecodePC: Int): Boolean = {
     tacTargetToByteCodePcs.exists { case (tacGoto, bcPC) => (tacGoto, bcPC) == (tacTarget, bytecodePC) }
-  }
-
-  def main(args: Array[String]): Unit = {
-    if (args.length != 1) {
-      println("Usage: TACtoBC <path to class or jar file>")
-      return
-    }
-
-    val file = new File(args(0))
-    if (!file.exists()) {
-      println(s"File ${file.getPath} does not exist.")
-      return
-    }
-
-    compileByteCode(file)
-
-    val tacs = compileTAC(file)
-
-    // Print out TAC
-    tacs.foreach { case (method, tac) =>
-      tac.detach()
-      println(s"Method: ${method.toJava}")
-      println(tac.toString)
-      println("\n")
-
-    }
-
-    // Print out the translation from TAC to Bytecode
-    val byteCodes = translateTACtoBC(tacs)
-    byteCodes.foreach { case (method, bytecode) =>
-      println(s"Method: ${method.toJava}")
-      bytecode.foreach(instr => println(instr.toString))
-    }
-
   }
 }
