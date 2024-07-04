@@ -98,8 +98,6 @@ object StmtProcessor {
   }
 
   def processVirtualMethodCall(declaringClass: ReferenceType, isInterface: Boolean, methodName: String, methodDescriptor: MethodDescriptor, receiver: Expr[_], params: Seq[Expr[_]], instructionsWithPCs: ArrayBuffer[(Int, Instruction)], currentPC: Int): Int = {
-    // val pcAfterLoadVariable = ExprUtils.processExpression(receiver, instructionsWithPCs, currentPC)
-    //instructionsWithPCs += ((currentPC, ALOAD_0))
     // Process the receiver object (e.g., aload_0 for `this`)
     val afterReceiverPC = ExprUtils.processExpression(receiver, instructionsWithPCs, currentPC)
 
@@ -135,10 +133,20 @@ object StmtProcessor {
 
   def processNonVirtualMethodCall(declaringClass: ObjectType, isInterface: Boolean, methodName: String, methodDescriptor: MethodDescriptor, receiver: Expr[_], params: Seq[Expr[_]], instructionsWithPCs: ArrayBuffer[(Int, Instruction)], currentPC: Int): Int = {
     //Todo: .this ALOAD_0 should also be part of the translation
+    // Process the receiver object (e.g., aload_0 for `this`)
     instructionsWithPCs += ((currentPC, ALOAD_0))
-    val pcAfterLOADTHIS = currentPC + ALOAD_0.length
+    val afterReceiverPC = currentPC + ALOAD_0.length
+   // val afterReceiverPC = ExprUtils.processExpression(receiver, instructionsWithPCs, currentPC)
+
+    // Initialize the PC after processing the receiver
+    var currentAfterParamsPC = afterReceiverPC
+
+    // Process each parameter and update the PC accordingly
+    for (param <- params) {
+      currentAfterParamsPC = ExprUtils.processExpression(param, instructionsWithPCs, currentAfterParamsPC)
+    }
     val instruction = INVOKESPECIAL(declaringClass, isInterface, methodName, methodDescriptor)
-    val finalPC = currentPC + pcAfterLOADTHIS
+    val finalPC = currentPC + currentAfterParamsPC
     instructionsWithPCs += ((finalPC, instruction))
     finalPC + instruction.length
   }

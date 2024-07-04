@@ -1,8 +1,6 @@
 /* BSD 2-Clause License - see OPAL/LICENSE for details. */
 package org.opalj.tac.tactobc
 
-//import org.opalj.ba.toDA
-//import org.opalj.bc.Assembler
 import org.opalj.ba.toDA
 import org.opalj.bc.Assembler
 import org.opalj.br.{Code, Method, ObjectType}
@@ -16,15 +14,6 @@ import org.opalj.util.InMemoryClassLoader
 
 import java.io.ByteArrayInputStream
 import java.nio.file.{Files, Paths}
-//import org.opalj.da.ClassFileReader.ClassFile
-//import org.opalj.io.writeAndOpen
-//import org.opalj.util.InMemoryClassLoader
-
-//import java.io.ByteArrayInputStream
-//import java.nio.file.Paths
-
-//import org.opalj.da.ClassFileReader.ClassFile
-//import org.opalj.io.writeAndOpen
 import org.opalj.tac._
 import org.opalj.value.ValueInformation
 
@@ -111,7 +100,7 @@ object TACtoBC {
 
                 val newBody = Code(
                   originalBody.maxStack,
-                  originalBody.maxLocals,
+                  3,
                   newInstructionsWithNulls,
                   originalBody.exceptionHandlers,
                   originalBody.attributes)
