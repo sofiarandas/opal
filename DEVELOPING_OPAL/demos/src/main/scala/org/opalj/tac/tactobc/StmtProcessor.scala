@@ -3,8 +3,8 @@ package org.opalj.tac.tactobc
 
 import org.opalj.RelationalOperator
 import org.opalj.RelationalOperators._
-import org.opalj.br.{ComputationalTypeDouble, ComputationalTypeFloat, ComputationalTypeInt, ComputationalTypeLong, ComputationalTypeReference, MethodDescriptor, ObjectType, ReferenceType}
-import org.opalj.br.instructions.{ARETURN, DRETURN, FRETURN, GOTO, IFNONNULL, IFNULL, IF_ICMPEQ, IF_ICMPGE, IF_ICMPGT, IF_ICMPLE, IF_ICMPLT, IF_ICMPNE, INVOKESPECIAL, INVOKESTATIC, INVOKEVIRTUAL, IRETURN, Instruction, LOOKUPSWITCH, LRETURN, RETURN, TABLESWITCH}
+import org.opalj.br.{BootstrapMethod, ComputationalTypeDouble, ComputationalTypeFloat, ComputationalTypeInt, ComputationalTypeLong, ComputationalTypeReference, MethodDescriptor, ObjectType, PCs, ReferenceType}
+import org.opalj.br.instructions.{ALOAD_0, ARETURN, DRETURN, FRETURN, GOTO, IFNONNULL, IFNULL, IF_ICMPEQ, IF_ICMPGE, IF_ICMPGT, IF_ICMPLE, IF_ICMPLT, IF_ICMPNE, INVOKESPECIAL, INVOKESTATIC, INVOKEVIRTUAL, IRETURN, Instruction, LOOKUPSWITCH, LRETURN, RETURN, TABLESWITCH}
 import org.opalj.collection.immutable.IntIntPair
 import org.opalj.tac.{Expr, UVar, Var}
 
@@ -98,18 +98,49 @@ object StmtProcessor {
   }
 
   def processVirtualMethodCall(declaringClass: ReferenceType, isInterface: Boolean, methodName: String, methodDescriptor: MethodDescriptor, receiver: Expr[_], params: Seq[Expr[_]], instructionsWithPCs: ArrayBuffer[(Int, Instruction)], currentPC: Int): Int = {
-    val instruction = /*if (isInterface) {
+    // val pcAfterLoadVariable = ExprUtils.processExpression(receiver, instructionsWithPCs, currentPC)
+    //instructionsWithPCs += ((currentPC, ALOAD_0))
+    // Process the receiver object (e.g., aload_0 for `this`)
+    val afterReceiverPC = ExprUtils.processExpression(receiver, instructionsWithPCs, currentPC)
+
+    // Initialize the PC after processing the receiver
+    var currentAfterParamsPC = afterReceiverPC
+
+    // Process each parameter and update the PC accordingly
+    for (param <- params) {
+      currentAfterParamsPC = ExprUtils.processExpression(param, instructionsWithPCs, currentAfterParamsPC)
+    }
+
+    val instruction = { /*if (isInterface) {
       INVOKEINTERFACE
     }else*/
-      INVOKEVIRTUAL(declaringClass, methodName, methodDescriptor)
-    instructionsWithPCs += ((currentPC, instruction))
-    currentPC + instruction.length
+    INVOKEVIRTUAL(declaringClass, methodName, methodDescriptor)
+    }
+    //val finalPC = currentPC + pcAfterLoadVariable
+    instructionsWithPCs += ((currentAfterParamsPC, instruction))
+    currentAfterParamsPC + instruction.length
+  }
+
+  def processInvokeDynamicMethodCall(bootstrapMethod: BootstrapMethod, name: String, descriptor: MethodDescriptor, params: Seq[Expr[_]]): Int = {
+    1
+  }
+
+  def processCheckCast(value: Expr[_], cmpTpe: ReferenceType, instructionsWithPCs: ArrayBuffer[(Int, Instruction)], currentPC: Int): Int = {
+    1
+  }
+
+  def processRet(returnAdresses: PCs, instructionsWithPCs: ArrayBuffer[(Int, Instruction)], currentPC: Int): Int = {
+    1
   }
 
   def processNonVirtualMethodCall(declaringClass: ObjectType, isInterface: Boolean, methodName: String, methodDescriptor: MethodDescriptor, receiver: Expr[_], params: Seq[Expr[_]], instructionsWithPCs: ArrayBuffer[(Int, Instruction)], currentPC: Int): Int = {
+    //Todo: .this ALOAD_0 should also be part of the translation
+    instructionsWithPCs += ((currentPC, ALOAD_0))
+    val pcAfterLOADTHIS = currentPC + ALOAD_0.length
     val instruction = INVOKESPECIAL(declaringClass, isInterface, methodName, methodDescriptor)
-    instructionsWithPCs += ((currentPC, instruction))
-    currentPC + instruction.length
+    val finalPC = currentPC + pcAfterLOADTHIS
+    instructionsWithPCs += ((finalPC, instruction))
+    finalPC + instruction.length
   }
 
   def processStaticMethodCall(declaringClass: ObjectType, isInterface: Boolean, methodName: String, methodDescriptor: MethodDescriptor, params: Seq[Expr[_]], instructionsWithPCs: ArrayBuffer[(Int, Instruction)], currentPC: Int): Int = {

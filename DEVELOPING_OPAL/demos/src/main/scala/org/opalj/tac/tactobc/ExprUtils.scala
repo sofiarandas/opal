@@ -122,7 +122,9 @@ object ExprUtils {
 
   def getVariableLvl(variable: Var[_]): Int = {
     val result = variable match {
-      case uVar: UVar[_] => uVar.definedBy.toList.head
+      case uVar: UVar[_] => if(uVar.definedBy.toList.head > 0) {
+        uVar.definedBy.toList.head
+      }else 0
       case dVar : DVar[_] => dVar.origin
       case _ => -1
     }

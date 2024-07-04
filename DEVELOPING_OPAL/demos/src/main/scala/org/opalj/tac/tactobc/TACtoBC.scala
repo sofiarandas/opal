@@ -5,13 +5,14 @@ package org.opalj.tac.tactobc
 //import org.opalj.bc.Assembler
 import org.opalj.ba.toDA
 import org.opalj.bc.Assembler
-import org.opalj.br.{Code, Method}
+import org.opalj.br.{Code, Method, ObjectType}
 import org.opalj.br.analyses.Project
 import org.opalj.br.instructions.{GOTO, IF_ICMPEQ, IF_ICMPGE, IF_ICMPGT, IF_ICMPLE, IF_ICMPLT, IF_ICMPNE, Instruction, LOOKUPSWITCH, TABLESWITCH}
 import org.opalj.br.reader.Java8Framework
 import org.opalj.collection.immutable.IntIntPair
 import org.opalj.da.ClassFileReader.ClassFile
 import org.opalj.io.writeAndOpen
+import org.opalj.util.InMemoryClassLoader
 
 import java.io.ByteArrayInputStream
 import java.nio.file.{Files, Paths}
@@ -77,17 +78,17 @@ object TACtoBC {
       }
     }*/
 
-   // val TheType = ObjectType("/org/opalj/ba/testingTAC/HelloWorldToString")
+   val TheType = ObjectType("org/opalj/ba/testingTAC/HelloWorldToString")
 
     val in = () => this.getClass.getResourceAsStream("/org/opalj/ba/testingTAC/HelloWorldToString.class")
     val cf = Java8Framework.ClassFile(in).head
-    val newMethods =
+    val newMethods = {
       for (m <- cf.methods) yield {
         m.body match {
           case None =>
             m.copy() // methods which are native and abstract ...
           case Some(originalBody) =>
-            //refactor to map.get(m)
+            //Using find because of the extra methods that do contain the name of the method but are not part of the original file
             byteCodes.find(bc => bc._1.name.contains(m.name)) match {
               case Some((_, instructions)) =>
                 // Prepare new instructions array with null values where necessary
@@ -119,10 +120,10 @@ object TACtoBC {
 
                 val result = m.copy(body = Some(newBody))
 
-               /* val it = result.body.get.iterator
+               val it = result.body.get.iterator
                 val n = it.next()
                 val n1 = it.next()
-                print(n.toString + n1.toString)*/
+                print(n.toString + n1.toString)
 
                 result
               case None =>
@@ -131,11 +132,11 @@ object TACtoBC {
             }
         }
       }
+
+    }
      val newRawCF = Assembler(toDA(cf.copy(methods = newMethods)))
-     val packagePath = Paths.get("/opalj/ba/testingTAC/")
-     Files.createDirectories(packagePath)
-     val firstRunnableClass = packagePath.resolve("HelloWorldToStringsofff.class")
-     println("Created class file: " + Files.write(firstRunnableClass, newRawCF).toAbsolutePath)
+     val assembledMyIntfPath = Paths.get("HelloWorldToString.class")
+     println("Created class file: "+Files.write(assembledMyIntfPath, newRawCF).toAbsolutePath)
 
      // Let's see the old class file...
      val odlCFHTML = ClassFile(in).head.toXHTML(None)
@@ -147,7 +148,14 @@ object TACtoBC {
      println("instrumented: " + writeAndOpen(newCF, "NewHelloWorldToString", ".html"))
 
     //println("Class file GeneratedHelloWorldToStringDALEQUEE.class has been generated." + newClass)
-  }
+    // Let's test that the new class does what it is expected to do... (we execute the
+    // instrumented method)
+    val cl = new InMemoryClassLoader(Map((TheType.toJava, newRawCF)))
+    val newClass = cl.findClass(TheType.toJava)
+    //val instance = newClass.getDeclaredConstructor().newInstance()
+
+    newClass.getMethod("main", (Array[String]()).getClass).invoke(null,null)
+   }
 
   /**
    * Compiles the Three-Address Code (TAC) representation for all methods in the given .class file.
@@ -269,6 +277,15 @@ object TACtoBC {
         case StaticMethodCall(_, declaringClass, isInterface, name, descriptor, params) =>
           tacTargetToByteCodePcs += ((-1, currentPC))
           currentPC = StmtProcessor.processStaticMethodCall(declaringClass, isInterface, name, descriptor, params, generatedByteCodeWithPC, currentPC)
+        case InvokedynamicMethodCall(_, bootstrapMethod, name, descriptor, params) =>
+          tacTargetToByteCodePcs += ((-1, currentPC))
+          currentPC = StmtProcessor.processInvokeDynamicMethodCall(bootstrapMethod, name, descriptor, params)
+        case Checkcast(_, value, cmpTpe) =>
+          tacTargetToByteCodePcs += ((-1, currentPC))
+          currentPC = StmtProcessor.processCheckCast(value, cmpTpe, generatedByteCodeWithPC, currentPC)
+        case Ret(_, returnAddresses) =>
+          tacTargetToByteCodePcs += ((-1, currentPC))
+          currentPC = StmtProcessor.processRet(returnAddresses, generatedByteCodeWithPC, currentPC)
         case ReturnValue(_, expr) =>
           tacTargetToByteCodePcs += ((-1, currentPC))
           currentPC = StmtProcessor.processReturnValue(expr, generatedByteCodeWithPC, currentPC)
