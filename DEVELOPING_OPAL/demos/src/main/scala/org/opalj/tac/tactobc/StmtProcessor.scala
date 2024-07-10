@@ -136,7 +136,7 @@ object StmtProcessor {
     // Process the receiver object (e.g., aload_0 for `this`)
     instructionsWithPCs += ((currentPC, ALOAD_0))
     val afterReceiverPC = currentPC + ALOAD_0.length
-   // val afterReceiverPC = ExprUtils.processExpression(receiver, instructionsWithPCs, currentPC)
+    //val afterReceiverPC = ExprUtils.processExpression(receiver, instructionsWithPCs, currentPC)
 
     // Initialize the PC after processing the receiver
     var currentAfterParamsPC = afterReceiverPC

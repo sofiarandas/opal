@@ -46,6 +46,16 @@ object ExprUtils {
   }
 
   def handleVirtualFunctionCall(expr: VirtualFunctionCall[_], instructionsWithPCs: ArrayBuffer[(Int, Instruction)], currentPC: Int): Int = {
+    // Process the receiver object (e.g., aload_0 for `this`)
+    val afterReceiverPC = ExprUtils.processExpression(expr.receiver, instructionsWithPCs, currentPC)
+
+    // Initialize the PC after processing the receiver
+    var currentAfterParamsPC = afterReceiverPC
+
+    // Process each parameter and update the PC accordingly
+    for (param <- expr.params) {
+      currentAfterParamsPC = ExprUtils.processExpression(param, instructionsWithPCs, currentAfterParamsPC)
+    }
     val instruction = if (expr.isInterface) {
       //INVOKEINTERFACE(expr.declaringClass, expr.name, expr.descriptor)
       throw new UnsupportedOperationException("Unsupported expression type" + expr)
@@ -53,8 +63,8 @@ object ExprUtils {
       INVOKEVIRTUAL(expr.declaringClass, expr.name, expr.descriptor)
     }
 
-    instructionsWithPCs += ((currentPC, instruction))
-    currentPC + instruction.length
+    instructionsWithPCs += ((currentAfterParamsPC, instruction))
+    currentAfterParamsPC + instruction.length
   }
 
   private def loadConstant(constExpr: Const, instructionsWithPCs: ArrayBuffer[(Int, Instruction)], currentPC: Int): Int = {
@@ -107,9 +117,14 @@ object ExprUtils {
     currentPC + instruction.length // Update and return the new program counter
   }
 
+
   // Map for variable indexing within methods
   private val variableLvlIndexMap: mutable.Map[Int, Int] = mutable.Map.empty
   private var nextAvailableIndex: Int = 1
+  // Reserve index 0 for level 0
+  //variableLvlIndexMap(0) = 0
+  // To handle unique levels for DVar with origin 0
+  //private var dVarZeroLevel: Int = 1
 
   def getVariableLvlIndex(variable: Var[_]): Int = {
     val lvl = getVariableLvl(variable)
@@ -120,12 +135,21 @@ object ExprUtils {
       })
   }
 
+  // Determine the level of a given variable
   def getVariableLvl(variable: Var[_]): Int = {
     val result = variable match {
-      case uVar: UVar[_] => if(uVar.definedBy.toList.head > 0) {
-        uVar.definedBy.toList.head
+      case uVar: UVar[_] => if(uVar.definedBy.toList.last > 0) {
+        uVar.definedBy.toList.last
       }else 0
-      case dVar : DVar[_] => dVar.origin
+      case dVar : DVar[_] =>
+        // Use the origin for DVar, with special handling for origin 0
+        /*if (dVar.origin == 0) {
+          val currentLevel = dVarZeroLevel
+          dVarZeroLevel += 1
+          currentLevel*/
+        //} else {
+          dVar.origin
+        //}
       case _ => -1
     }
     result
@@ -209,7 +233,6 @@ object ExprUtils {
           case 3 => LSTORE_3
           case _ => LSTORE(index)
         }
-        //todo: find out if I should handle this cases
         case ComputationalTypeReference => index match {
           case 0 => ASTORE_0
           case 1 => ASTORE_1

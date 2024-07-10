@@ -3,7 +3,7 @@ package org.opalj.tac.tactobc
 
 import org.opalj.ba.toDA
 import org.opalj.bc.Assembler
-import org.opalj.br.{Code, Method, ObjectType}
+import org.opalj.br.{ArrayType, Code, LocalVariable, LocalVariableTable, Method, ObjectType}
 import org.opalj.br.analyses.Project
 import org.opalj.br.instructions.{GOTO, IF_ICMPEQ, IF_ICMPGE, IF_ICMPGT, IF_ICMPLE, IF_ICMPLT, IF_ICMPNE, Instruction, LOOKUPSWITCH, TABLESWITCH}
 import org.opalj.br.reader.Java8Framework
@@ -18,6 +18,7 @@ import org.opalj.tac._
 import org.opalj.value.ValueInformation
 
 import java.io.File
+import scala.Console.println
 import scala.collection.immutable.ArraySeq
 import scala.collection.mutable.ArrayBuffer
 
@@ -55,18 +56,6 @@ object TACtoBC {
       bytecode.foreach(instr => println(instr.toString))
     }
 
-    //todo: fill array of instructions with nulls
-    /*val byteCodesWithNulls = byteCodes.foreach{ case (method, bytecode) =>
-      val bytecodeArrayWithNulls = new Array[Instruction](bytecode.last._1)
-      val index = 0
-      while(index < bytecodeArrayWithNulls.length) {
-        val instruction = byteCodes.get(method).get
-        if(index.==(b)){
-
-        }
-      }
-    }*/
-
    val TheType = ObjectType("org/opalj/ba/testingTAC/HelloWorldToString")
 
     val in = () => this.getClass.getResourceAsStream("/org/opalj/ba/testingTAC/HelloWorldToString.class")
@@ -94,19 +83,42 @@ object TACtoBC {
                   newInstructionsWithNulls(pc) = instruction
                 }
 
+                // Print each instruction with its PC - to see if the NULLS are placed correctly
+                println(s"Instructions for method ${m.name}:")
+                newInstructionsWithNulls.zipWithIndex.foreach {
+                  case (instruction, pc) =>
+                    if (instruction == null) {
+                      println(s"PC $pc: NULL")
+                    } else {
+                      println(s"PC $pc: ${instruction.toString}")
+                    }
+                }
+
+                // Print out the translation from TAC to Bytecode with nulls
+                //println("newInstrWithNulls" + newInstructionsWithNulls.foreach(instruction => println(instruction.toString)))
                 // Debugging: Print the instructions being passed to the new Code object
                 println(s"Original Instructions for ${m.name}: ${originalBody.instructions.mkString(", ")}")
                 println(s"New Instructions for ${m.name}: ${newInstructionsWithNulls.mkString(", ")}")
+                val attributesOfOriginalBody = originalBody.attributes
+                val newLocalVariableTable = LocalVariableTable(ArraySeq(
+                  LocalVariable(0, maxPc + 1, "args", ArrayType(ObjectType("java/lang/String")), 0)
+                ))
+
+                // Replace the LocalVariableTable attribute in the original attributes
+                val newAttributes = attributesOfOriginalBody.map {
+                  case _: LocalVariableTable => newLocalVariableTable
+                  case other => other
+                }
 
                 val newBody = Code(
-                  originalBody.maxStack,
-                  3,
+                  100,
+                  100,
                   newInstructionsWithNulls,
                   originalBody.exceptionHandlers,
-                  originalBody.attributes)
+                  newAttributes)
 
                 println(s"New body for method ${m.name}: $newBody")
-
+                println(attributesOfOriginalBody)
                 val result = m.copy(body = Some(newBody))
 
                val it = result.body.get.iterator
@@ -121,11 +133,12 @@ object TACtoBC {
             }
         }
       }
-
     }
-     val newRawCF = Assembler(toDA(cf.copy(methods = newMethods)))
-     val assembledMyIntfPath = Paths.get("HelloWorldToString.class")
-     println("Created class file: "+Files.write(assembledMyIntfPath, newRawCF).toAbsolutePath)
+     val cfWithNewInstructions = cf.copy(methods = newMethods)
+     val newRawCF = Assembler(toDA(cfWithNewInstructions))
+     val assembledMyIntfPath = Paths.get("tmp", "org", "opalj", "ba", "testingTAC", "HelloWorldToString.class")
+     val newClassFile = Files.write(assembledMyIntfPath, newRawCF)
+     println("Created class file: " + newClassFile.toAbsolutePath)
 
      // Let's see the old class file...
      val odlCFHTML = ClassFile(in).head.toXHTML(None)
@@ -142,7 +155,6 @@ object TACtoBC {
     val cl = new InMemoryClassLoader(Map((TheType.toJava, newRawCF)))
     val newClass = cl.findClass(TheType.toJava)
     //val instance = newClass.getDeclaredConstructor().newInstance()
-
     newClass.getMethod("main", (Array[String]()).getClass).invoke(null,null)
    }
 
@@ -206,8 +218,7 @@ object TACtoBC {
    * Translates the TAC representations of methods back to bytecode, encapsulated within OPAL's Code structure.
    *
    * This method iterates over each method's TAC representation and generates a corresponding sequence of
-   * bytecode instructions, effectively reversing the process of TAC generation. The resulting bytecode
-   * is suitable for execution by the JVM.
+   * bytecode instructions, effectively reversing the process of TAC generation.
    *
    * @param tacs A Map containing the TAC representations of methods to be translated back to bytecode.
    * @return A Map associating each method with its newly generated bytecode, wrapped in OPAL's Code structure.
@@ -228,7 +239,7 @@ object TACtoBC {
    * into their equivalent bytecode form.
    *
    * @param tac The TAC representation of a method to be converted into bytecode.
-   * @return An array of bytecode instructions representing the method's functionality, ready to be executed by the JVM.
+   * @return An array of bytecode instructions representing the method's functionality
    */
   def translateSingleTACtoBC(tac: AITACode[TACMethodParameter, ValueInformation]): ArrayBuffer[(Int, Instruction)] = {
     val generatedByteCodeWithPC = ArrayBuffer[(Int, Instruction)]()
