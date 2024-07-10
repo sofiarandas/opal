@@ -152,9 +152,16 @@ object StmtProcessor {
   }
 
   def processStaticMethodCall(declaringClass: ObjectType, isInterface: Boolean, methodName: String, methodDescriptor: MethodDescriptor, params: Seq[Expr[_]], instructionsWithPCs: ArrayBuffer[(Int, Instruction)], currentPC: Int): Int = {
+    // Initialize the PC after processing the receiver
+    var currentAfterParamsPC = currentPC
+
+    // Process each parameter and update the PC accordingly
+    for (param <- params) {
+      currentAfterParamsPC = ExprUtils.processExpression(param, instructionsWithPCs, currentAfterParamsPC)
+    }
     val instruction = INVOKESTATIC(declaringClass, isInterface, methodName, methodDescriptor)
-    instructionsWithPCs += ((currentPC, instruction))
-    currentPC + instruction.length
+    instructionsWithPCs += ((currentAfterParamsPC, instruction))
+    currentAfterParamsPC + instruction.length
   }
 
   def processGoto(instructionsWithPCs: ArrayBuffer[(Int, Instruction)], currentPC: Int): Int = {
