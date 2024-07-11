@@ -126,6 +126,9 @@ object ExprUtils {
   // To handle unique levels for DVar with origin 0
   //private var dVarZeroLevel: Int = 1
 
+  //ToDo: handle DVar und UVar better
+  //ToDo: in a way that I do handle them correctly
+  //ToDo:
   def getVariableLvlIndex(variable: Var[_]): Int = {
     val lvl = getVariableLvl(variable)
     variableLvlIndexMap.getOrElseUpdate(lvl, {
@@ -138,8 +141,8 @@ object ExprUtils {
   // Determine the level of a given variable
   def getVariableLvl(variable: Var[_]): Int = {
     val result = variable match {
-      case uVar: UVar[_] => if(uVar.definedBy.toList.last > 0) {
-        uVar.definedBy.toList.last
+      case uVar: UVar[_] => if(uVar.definedBy.toList.head > 0) {
+        uVar.definedBy.toList.head
       }else 0
       case dVar : DVar[_] =>
         // Use the origin for DVar, with special handling for origin 0

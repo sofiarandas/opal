@@ -1,9 +1,10 @@
 /* BSD 2-Clause License - see OPAL/LICENSE for details. */
 package org.opalj.tac.tactobc
 
+import org.opalj.ba.CodeAttributeBuilder.computeStackMapTable
 import org.opalj.ba.toDA
 import org.opalj.bc.Assembler
-import org.opalj.br.{ArrayType, Code, LocalVariable, LocalVariableTable, Method, ObjectType}
+import org.opalj.br.{ArrayType, Code, LocalVariable, LocalVariableTable, Method, ObjectType, StackMapTable}
 import org.opalj.br.analyses.Project
 import org.opalj.br.instructions.{GOTO, IF_ICMPEQ, IF_ICMPGE, IF_ICMPGT, IF_ICMPLE, IF_ICMPLT, IF_ICMPNE, Instruction, LOOKUPSWITCH, TABLESWITCH}
 import org.opalj.br.reader.Java8Framework
@@ -35,7 +36,8 @@ object TACtoBC {
       println(s"File ${file.getPath} does not exist.")
       return
     }
-
+    //do this implicit val
+    val p = Project(file)
     compileByteCode(file)
 
     val tacs = compileTAC(file)
@@ -99,11 +101,13 @@ object TACtoBC {
                 // Debugging: Print the instructions being passed to the new Code object
                 println(s"Original Instructions for ${m.name}: ${originalBody.instructions.mkString(", ")}")
                 println(s"New Instructions for ${m.name}: ${newInstructionsWithNulls.mkString(", ")}")
+                //ToDo: use CodeAttribute builder
                 val attributesOfOriginalBody = originalBody.attributes
+                //Todo:
                 val newLocalVariableTable = LocalVariableTable(ArraySeq(
                   LocalVariable(0, maxPc + 1, "args", ArrayType(ObjectType("java/lang/String")), 0)
                 ))
-
+                //live variable
                 // Replace the LocalVariableTable attribute in the original attributes
                 val newAttributes = attributesOfOriginalBody.map {
                   case _: LocalVariableTable => newLocalVariableTable
@@ -111,20 +115,17 @@ object TACtoBC {
                 }
 
                 val newBody = Code(
+                  //todo: use the size of the local variables map
                   100,
                   100,
                   newInstructionsWithNulls,
                   originalBody.exceptionHandlers,
                   newAttributes)
 
+                //todo: StackMapTable needs the localVariableTable to be able to be computed
                 println(s"New body for method ${m.name}: $newBody")
                 println(attributesOfOriginalBody)
                 val result = m.copy(body = Some(newBody))
-
-               val it = result.body.get.iterator
-                val n = it.next()
-                val n1 = it.next()
-                print(n.toString + n1.toString)
 
                 result
               case None =>
@@ -135,7 +136,53 @@ object TACtoBC {
       }
     }
      val cfWithNewInstructions = cf.copy(methods = newMethods)
-     val newRawCF = Assembler(toDA(cfWithNewInstructions))
+     val newMethodsForReal = {
+       for (m <- cfWithNewInstructions.methods) yield {
+         m.body match {
+           case None =>
+             m.copy() // methods which are native and abstract ...
+           case Some(originalBody) =>
+             //Using find because of the extra methods that do contain the name of the method but are not part of the original file
+             byteCodes.find(bc => bc._1.name.contains(m.name)) match {
+               case Some((_, instructions)) =>
+                 //ToDo: use CodeAttribute builder
+                 val attributesOfOriginalBody = originalBody.attributes
+
+                 val newStackMapTable = computeStackMapTable(m)(p.classHierarchy)
+                 //live variable
+                 // Replace the LocalVariableTable attribute in the original attributes
+                 val newAttributes1 = attributesOfOriginalBody.map {
+                   case _: StackMapTable => newStackMapTable
+                   case other => other
+                 }
+                 val newBody1 = Code(
+                   //todo: use the size of the local variables map
+                   100,
+                   100,
+                   originalBody.instructions,
+                   originalBody.exceptionHandlers,
+                   newAttributes1)
+
+                 //todo: StackMapTable needs the localVariableTable to be able to be computed
+                 println(s"New body for method ${m.name}: $newBody1")
+                 println(attributesOfOriginalBody)
+                 val result = m.copy(body = Some(newBody1))
+
+                 val it = result.body.get.iterator
+                 val n = it.next()
+                 val n1 = it.next()
+                 print(n.toString + n1.toString)
+
+                 result
+               case None =>
+                 println(s"Warning: No bytecode found for method ${m.name}. Keeping original method body.")
+                 m.copy()
+             }
+         }
+       }
+     }
+     val cfWithNewInstructionsForReal = cf.copy(methods = newMethodsForReal)
+     val newRawCF = Assembler(toDA(cfWithNewInstructionsForReal))
      val assembledMyIntfPath = Paths.get("tmp", "org", "opalj", "ba", "testingTAC", "HelloWorldToString.class")
      val newClassFile = Files.write(assembledMyIntfPath, newRawCF)
      println("Created class file: " + newClassFile.toAbsolutePath)
@@ -147,7 +194,7 @@ object TACtoBC {
 
      // Let's see the new class file...
      val newCF = ClassFile(() => new ByteArrayInputStream(newRawCF)).head.toXHTML(None)
-     println("instrumented: " + writeAndOpen(newCF, "NewHelloWorldToString", ".html"))
+     println("genetated from TAC: " + writeAndOpen(newCF, "NewHelloWorldToString", ".html"))
 
     //println("Class file GeneratedHelloWorldToStringDALEQUEE.class has been generated." + newClass)
     // Let's test that the new class does what it is expected to do... (we execute the
@@ -306,36 +353,36 @@ object TACtoBC {
         val updatedInstruction = instruction match {
           case IF_ICMPEQ(-1) =>
             tacTargetToByteCodePcsIndex -= 1
-            val instruction = IF_ICMPEQ(updateBranchTargets(tacTargetToByteCodePcs, tacTargetToByteCodePcsIndex))
+            val instruction = IF_ICMPEQ(updateBranchTargets(tacTargetToByteCodePcs, tacTargetToByteCodePcsIndex, pc))
             tacTargetToByteCodePcsIndex += 1
             instruction
           case IF_ICMPNE(-1) =>
             tacTargetToByteCodePcsIndex -= 1
-            val instruction = IF_ICMPNE(updateBranchTargets(tacTargetToByteCodePcs, tacTargetToByteCodePcsIndex))
+            val instruction = IF_ICMPNE(updateBranchTargets(tacTargetToByteCodePcs, tacTargetToByteCodePcsIndex, pc))
             tacTargetToByteCodePcsIndex += 1
             instruction
           case IF_ICMPLT(-1) =>
             tacTargetToByteCodePcsIndex -= 1
-            val instruction = IF_ICMPLT(updateBranchTargets(tacTargetToByteCodePcs, tacTargetToByteCodePcsIndex))
+            val instruction = IF_ICMPLT(updateBranchTargets(tacTargetToByteCodePcs, tacTargetToByteCodePcsIndex, pc))
             tacTargetToByteCodePcsIndex += 1
             instruction
           case IF_ICMPLE(-1) =>
             tacTargetToByteCodePcsIndex -= 1
-            val instruction = IF_ICMPLE(updateBranchTargets(tacTargetToByteCodePcs, tacTargetToByteCodePcsIndex))
+            val instruction = IF_ICMPLE(updateBranchTargets(tacTargetToByteCodePcs, tacTargetToByteCodePcsIndex, pc))
             tacTargetToByteCodePcsIndex += 1
             instruction
           case IF_ICMPGT(-1) =>
             tacTargetToByteCodePcsIndex -= 1
-            val instruction = IF_ICMPGT(updateBranchTargets(tacTargetToByteCodePcs, tacTargetToByteCodePcsIndex))
+            val instruction = IF_ICMPGT(updateBranchTargets(tacTargetToByteCodePcs, tacTargetToByteCodePcsIndex, pc))
             tacTargetToByteCodePcsIndex += 1
             instruction
           case IF_ICMPGE(-1) =>
             tacTargetToByteCodePcsIndex -= 1
-            val instruction = IF_ICMPGE(updateBranchTargets(tacTargetToByteCodePcs, tacTargetToByteCodePcsIndex))
+            val instruction = IF_ICMPGE(updateBranchTargets(tacTargetToByteCodePcs, tacTargetToByteCodePcsIndex, pc))
             tacTargetToByteCodePcsIndex += 1
             instruction
           case GOTO(-1) =>
-            GOTO(updateBranchTargets(tacTargetToByteCodePcs, tacTargetToByteCodePcsIndex))
+            GOTO(updateBranchTargets(tacTargetToByteCodePcs, tacTargetToByteCodePcsIndex, pc))
           case LOOKUPSWITCH(defaultOffset, matchOffsets) =>
             val updatedMatchOffsets = matchOffsets.map { case IntIntPair(caseValue, _) =>
               val tacTarget = findTacTarget(switchCases, caseValue)
@@ -368,9 +415,9 @@ object TACtoBC {
     tacTarget
   }
 
-  def updateBranchTargets(tacTargetToByteCodePcs: ArrayBuffer[(Int, Int)], tacTargetToByteCodePcsIndex: Int): Int = {
+  def updateBranchTargets(tacTargetToByteCodePcs: ArrayBuffer[(Int, Int)], tacTargetToByteCodePcsIndex: Int, currentPC: Int): Int = {
     val tacTarget = tacTargetToByteCodePcs(tacTargetToByteCodePcsIndex)._1
-    val byteCodeTarget = tacTargetToByteCodePcs(tacTarget)._2
+    val byteCodeTarget = tacTargetToByteCodePcs(tacTarget)._2 - currentPC
     byteCodeTarget
   }
 
