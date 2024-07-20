@@ -21,11 +21,12 @@ import org.opalj.value.ValueInformation
 import java.io.File
 import scala.Console.println
 import scala.collection.immutable.ArraySeq
+import scala.collection.mutable
 import scala.collection.mutable.ArrayBuffer
 
 object TACtoBC {
 
-   def main(args: Array[String]): Unit = {
+  def main(args: Array[String]): Unit = {
     if (args.length != 1) {
       println("Usage: TACtoBC <path to class or jar file>")
       return
@@ -58,7 +59,7 @@ object TACtoBC {
       bytecode.foreach(instr => println(instr.toString))
     }
 
-   val TheType = ObjectType("org/opalj/ba/testingTAC/HelloWorldToString")
+    val TheType = ObjectType("org/opalj/ba/testingTAC/HelloWorldToString")
 
     val in = () => this.getClass.getResourceAsStream("/org/opalj/ba/testingTAC/HelloWorldToString.class")
     val cf = Java8Framework.ClassFile(in).head
@@ -135,66 +136,66 @@ object TACtoBC {
         }
       }
     }
-     val cfWithNewInstructions = cf.copy(methods = newMethods)
-     val newMethodsForReal = {
-       for (m <- cfWithNewInstructions.methods) yield {
-         m.body match {
-           case None =>
-             m.copy() // methods which are native and abstract ...
-           case Some(originalBody) =>
-             //Using find because of the extra methods that do contain the name of the method but are not part of the original file
-             byteCodes.find(bc => bc._1.name.contains(m.name)) match {
-               case Some((_, instructions)) =>
-                 //ToDo: use CodeAttribute builder
-                 val attributesOfOriginalBody = originalBody.attributes
+    val cfWithNewInstructions = cf.copy(methods = newMethods)
+    val newMethodsForReal = {
+      for (m <- cfWithNewInstructions.methods) yield {
+        m.body match {
+          case None =>
+            m.copy() // methods which are native and abstract ...
+          case Some(originalBody) =>
+            //Using find because of the extra methods that do contain the name of the method but are not part of the original file
+            byteCodes.find(bc => bc._1.name.contains(m.name)) match {
+              case Some((_, instructions)) =>
+                //ToDo: use CodeAttribute builder
+                val attributesOfOriginalBody = originalBody.attributes
 
-                 val newStackMapTable = computeStackMapTable(m)(p.classHierarchy)
-                 //live variable
-                 // Replace the LocalVariableTable attribute in the original attributes
-                 val newAttributes1 = attributesOfOriginalBody.map {
-                   case _: StackMapTable => newStackMapTable
-                   case other => other
-                 }
-                 val newBody1 = Code(
-                   //todo: use the size of the local variables map
-                   100,
-                   100,
-                   originalBody.instructions,
-                   originalBody.exceptionHandlers,
-                   newAttributes1)
+                val newStackMapTable = computeStackMapTable(m)(p.classHierarchy)
+                //live variable
+                // Replace the LocalVariableTable attribute in the original attributes
+                val newAttributes1 = attributesOfOriginalBody.map {
+                  case _: StackMapTable => newStackMapTable
+                  case other => other
+                }
+                val newBody1 = Code(
+                  //todo: use the size of the local variables map
+                  100,
+                  100,
+                  originalBody.instructions,
+                  originalBody.exceptionHandlers,
+                  newAttributes1)
 
-                 //todo: StackMapTable needs the localVariableTable to be able to be computed
-                 println(s"New body for method ${m.name}: $newBody1")
-                 println(attributesOfOriginalBody)
-                 val result = m.copy(body = Some(newBody1))
+                //todo: StackMapTable needs the localVariableTable to be able to be computed
+                println(s"New body for method ${m.name}: $newBody1")
+                println(attributesOfOriginalBody)
+                val result = m.copy(body = Some(newBody1))
 
-                 val it = result.body.get.iterator
-                 val n = it.next()
-                 val n1 = it.next()
-                 print(n.toString + n1.toString)
+                val it = result.body.get.iterator
+                val n = it.next()
+                val n1 = it.next()
+                print(n.toString + n1.toString)
 
-                 result
-               case None =>
-                 println(s"Warning: No bytecode found for method ${m.name}. Keeping original method body.")
-                 m.copy()
-             }
-         }
-       }
-     }
-     val cfWithNewInstructionsForReal = cf.copy(methods = newMethodsForReal)
-     val newRawCF = Assembler(toDA(cfWithNewInstructionsForReal))
-     val assembledMyIntfPath = Paths.get("tmp", "org", "opalj", "ba", "testingTAC", "HelloWorldToString.class")
-     val newClassFile = Files.write(assembledMyIntfPath, newRawCF)
-     println("Created class file: " + newClassFile.toAbsolutePath)
+                result
+              case None =>
+                println(s"Warning: No bytecode found for method ${m.name}. Keeping original method body.")
+                m.copy()
+            }
+        }
+      }
+    }
+    val cfWithNewInstructionsForReal = cf.copy(methods = newMethodsForReal)
+    val newRawCF = Assembler(toDA(cfWithNewInstructionsForReal))
+    val assembledMyIntfPath = Paths.get("tmp", "org", "opalj", "ba", "testingTAC", "HelloWorldToString.class")
+    val newClassFile = Files.write(assembledMyIntfPath, newRawCF)
+    println("Created class file: " + newClassFile.toAbsolutePath)
 
-     // Let's see the old class file...
-     val odlCFHTML = ClassFile(in).head.toXHTML(None)
-     val oldCFHTMLFile = writeAndOpen(odlCFHTML, "HelloWorldToString", ".html")
-     println("original: " + oldCFHTMLFile)
+    // Let's see the old class file...
+    val odlCFHTML = ClassFile(in).head.toXHTML(None)
+    val oldCFHTMLFile = writeAndOpen(odlCFHTML, "HelloWorldToString", ".html")
+    println("original: " + oldCFHTMLFile)
 
-     // Let's see the new class file...
-     val newCF = ClassFile(() => new ByteArrayInputStream(newRawCF)).head.toXHTML(None)
-     println("genetated from TAC: " + writeAndOpen(newCF, "NewHelloWorldToString", ".html"))
+    // Let's see the new class file...
+    val newCF = ClassFile(() => new ByteArrayInputStream(newRawCF)).head.toXHTML(None)
+    println("genetated from TAC: " + writeAndOpen(newCF, "NewHelloWorldToString", ".html"))
 
     //println("Class file GeneratedHelloWorldToStringDALEQUEE.class has been generated." + newClass)
     // Let's test that the new class does what it is expected to do... (we execute the
@@ -202,8 +203,8 @@ object TACtoBC {
     val cl = new InMemoryClassLoader(Map((TheType.toJava, newRawCF)))
     val newClass = cl.findClass(TheType.toJava)
     //val instance = newClass.getDeclaredConstructor().newInstance()
-    newClass.getMethod("main", (Array[String]()).getClass).invoke(null,null)
-   }
+    newClass.getMethod("main", (Array[String]()).getClass).invoke(null, null)
+  }
 
   /**
    * Compiles the Three-Address Code (TAC) representation for all methods in the given .class file.
@@ -293,8 +294,30 @@ object TACtoBC {
     var currentPC = 0
     val tacTargetToByteCodePcs = ArrayBuffer[(Int, Int)]()
     val switchCases = ArrayBuffer[(Int, Int)]() // To store switch case targets
-    //first pass
+    val duVars = mutable.ListBuffer[DUVar[_]]()
     val tacStmts = tac.stmts.zipWithIndex
+    tacStmts.foreach { case (stmt, _) =>
+      stmt match {
+        case Assignment(_, targetVar, expr) =>
+          ExprUtils.collectFromExpr(targetVar, duVars)
+          ExprUtils.collectFromExpr(expr, duVars)
+        case If(_, left, _, right, _) =>
+          ExprUtils.collectFromExpr(left, duVars)
+          ExprUtils.collectFromExpr(right, duVars)
+        case VirtualMethodCall(_, _, _, _, _, receiver, params) =>
+          ExprUtils.collectFromExpr(receiver, duVars)
+          for (param <- params) {
+            ExprUtils.collectFromExpr(param, duVars)
+          }
+        case _ =>
+      }
+    }
+    val resultDUVars = duVars
+    println(resultDUVars)
+    //ExprUtils.populateVariableLVIndexMap(duVars)
+    val resultingLVIndexMap = ExprUtils.collectAllUVarsAndPopulate(duVars)
+    println(resultingLVIndexMap)
+    //first pass
     tacStmts.foreach { case (stmt, _) =>
       stmt match {
         case Assignment(_, targetVar, expr) =>

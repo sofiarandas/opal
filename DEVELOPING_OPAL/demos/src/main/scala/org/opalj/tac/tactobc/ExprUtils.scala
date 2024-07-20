@@ -5,7 +5,8 @@ import org.opalj.BinaryArithmeticOperators.{Add, And, Divide, Modulo, Multiply, 
 import org.opalj.br.{ComputationalTypeDouble, ComputationalTypeFloat, ComputationalTypeInt, ComputationalTypeLong, ComputationalTypeReference, ObjectType}
 import org.opalj.br.instructions.{ALOAD, ALOAD_0, ALOAD_1, ALOAD_2, ALOAD_3, ASTORE, ASTORE_0, ASTORE_1, ASTORE_2, ASTORE_3, BIPUSH, DADD, DCONST_0, DCONST_1, DDIV, DLOAD, DLOAD_0, DLOAD_1, DLOAD_2, DLOAD_3, DMUL, DREM, DSTORE, DSTORE_0, DSTORE_1, DSTORE_2, DSTORE_3, DSUB, FADD, FCONST_0, FCONST_1, FCONST_2, FDIV, FLOAD, FLOAD_0, FLOAD_1, FLOAD_2, FLOAD_3, FMUL, FREM, FSTORE, FSTORE_0, FSTORE_1, FSTORE_2, FSTORE_3, FSUB, GETFIELD, GETSTATIC, IADD, IAND, ICONST_0, ICONST_1, ICONST_2, ICONST_3, ICONST_4, ICONST_5, ICONST_M1, IDIV, ILOAD, ILOAD_0, ILOAD_1, ILOAD_2, ILOAD_3, IMUL, INVOKEINTERFACE, INVOKESTATIC, INVOKEVIRTUAL, IOR, IREM, ISHL, ISHR, ISTORE, ISTORE_0, ISTORE_1, ISTORE_2, ISTORE_3, ISUB, IUSHR, IXOR, Instruction, LADD, LAND, LCONST_0, LCONST_1, LDIV, LLOAD, LLOAD_0, LLOAD_1, LLOAD_2, LLOAD_3, LMUL, LOR, LREM, LSHL, LSHR, LSTORE, LSTORE_0, LSTORE_1, LSTORE_2, LSTORE_3, LSUB, LUSHR, LXOR, LoadClass, LoadDouble, LoadFloat, LoadInt, LoadLong, LoadMethodHandle, LoadMethodType, LoadString, NEW, SIPUSH}
 import org.opalj.bytecode.BytecodeProcessingFailedException
-import org.opalj.tac.{BinaryExpr, ClassConst, Const, DVar, DoubleConst, Expr, FloatConst, GetField, GetStatic, IntConst, LongConst, MethodHandleConst, MethodTypeConst, New, StaticFunctionCall, StringConst, UVar, Var, VirtualFunctionCall}
+import org.opalj.collection.immutable.IntTrieSet
+import org.opalj.tac.{BinaryExpr, ClassConst, Const, DUVar, DVar, DoubleConst, Expr, FloatConst, GetField, GetStatic, IntConst, LongConst, MethodHandleConst, MethodTypeConst, New, StaticFunctionCall, StringConst, UVar, Var, VirtualFunctionCall}
 
 import scala.collection.mutable
 import scala.collection.mutable.ArrayBuffer
@@ -24,6 +25,50 @@ object ExprUtils {
       case newExpr: New => handleNewExpr(newExpr.tpe, instructionsWithPCs, currentPC)
       case _ =>
         throw new UnsupportedOperationException("Unsupported expression type" + expr)
+    }
+  }
+/*
+  // Create empty disjoint sets
+  var disjointSets = DisjointSets[DUVar[_]]()
+
+  // Method to add DUVar to disjoint sets
+  def addToDisjointSets(duVar: DUVar[_]): Unit = {
+    duVar match {
+      case dVar: DVar[_] =>
+        // Add DVar origin to disjoint sets
+        disjointSets = disjointSets + dVar.origin
+        // Merge DVar with all use-site UVars
+        dVar.useSites.foreach { useSite =>
+          disjointSets = disjointSets + useSite
+          disjointSets = disjointSets.union(dVar.origin, useSite)._1
+        }
+      case uVar: UVar[_] =>
+        // Add UVar defSites to disjoint sets
+        uVar.defSites.foreach { defSite =>
+          disjointSets = disjointSets + defSite
+        }
+    }
+  }*/
+
+
+  def collectFromExpr(expr: Expr[_], duVars: mutable.ListBuffer[DUVar[_]]): Unit = {
+    expr match {
+      case duVar: DUVar[_] => duVars += duVar
+      case binaryExpr: BinaryExpr[_] => collectFromBinaryExpr(binaryExpr, duVars)
+      case virtualFunctionCallExpr: VirtualFunctionCall[_] => collectFromVirtualMethodCall(virtualFunctionCallExpr, duVars)
+      case _ =>
+    }
+  }
+
+  def collectFromBinaryExpr(binaryExpr: BinaryExpr[_], duVars: mutable.ListBuffer[DUVar[_]]): Unit = {
+    collectFromExpr(binaryExpr.left, duVars)
+    collectFromExpr(binaryExpr.right, duVars)
+  }
+
+  def collectFromVirtualMethodCall(virtualFunctionCallExpr: VirtualFunctionCall[_], duVars: mutable.ListBuffer[DUVar[_]]): Unit = {
+    collectFromExpr(virtualFunctionCallExpr.receiver, duVars)
+    for (param <- virtualFunctionCallExpr.params) {
+      collectFromExpr(param, duVars)
     }
   }
 
@@ -117,12 +162,39 @@ object ExprUtils {
     currentPC + instruction.length // Update and return the new program counter
   }
 
+  val uvarToLVIndex = mutable.Map[IntTrieSet, Int]()
+  var nextLVIndex = 1
+
+  def collectAllUVarsAndPopulate(duVars: mutable.ListBuffer[DUVar[_]]): Unit = {
+    duVars.toArray.foreach {
+      case uVar : UVar[_] => populateUvarToLVIndexMap(uVar)
+      case _ =>
+    }
+  }
+
+  def populateUvarToLVIndexMap(uVar: UVar[_]): mutable.Map[IntTrieSet, Int] = {
+    // Check if any existing key contains any of the def-sites
+    val existingEntry = uvarToLVIndex.find { case (key, _) => key.intersect(uVar.defSites).nonEmpty }
+
+    existingEntry match {
+      case Some((existingDefSites, index)) =>
+        // Merge the def-sites and update the map
+        val mergedDefSites = existingDefSites ++ uVar.defSites
+        uvarToLVIndex -= existingDefSites
+        uvarToLVIndex(mergedDefSites) = index
+      case None =>
+        // No overlapping def-sites found, add a new entry
+        uvarToLVIndex(uVar.defSites) = nextLVIndex
+        nextLVIndex += 1
+    }
+    uvarToLVIndex
+  }
 
   // Map for variable indexing within methods
-  private val variableLvlIndexMap: mutable.Map[Int, Int] = mutable.Map.empty
-  private var nextAvailableIndex: Int = 1
+  private val variableLvlIndexMapold: mutable.Map[Int, Int] = mutable.Map.empty
+  private var nextAvailableIndexold: Int = 1
   // Reserve index 0 for level 0
-  //variableLvlIndexMap(0) = 0
+  //variableLvlIndexMap(0) = -1
   // To handle unique levels for DVar with origin 0
   //private var dVarZeroLevel: Int = 1
 
@@ -131,9 +203,9 @@ object ExprUtils {
   //ToDo:
   def getVariableLvlIndex(variable: Var[_]): Int = {
     val lvl = getVariableLvl(variable)
-    variableLvlIndexMap.getOrElseUpdate(lvl, {
-        val newIndex = nextAvailableIndex
-        nextAvailableIndex += 1
+    variableLvlIndexMapold.getOrElseUpdate(lvl, {
+        val newIndex = nextAvailableIndexold
+      nextAvailableIndexold += 1
         newIndex
       })
   }
@@ -142,17 +214,11 @@ object ExprUtils {
   def getVariableLvl(variable: Var[_]): Int = {
     val result = variable match {
       case uVar: UVar[_] => if(uVar.definedBy.toList.head > 0) {
-        uVar.definedBy.toList.head
+        uVar.definedBy.toList.last
       }else 0
       case dVar : DVar[_] =>
         // Use the origin for DVar, with special handling for origin 0
-        /*if (dVar.origin == 0) {
-          val currentLevel = dVarZeroLevel
-          dVarZeroLevel += 1
-          currentLevel*/
-        //} else {
-          dVar.origin
-        //}
+        dVar.origin
       case _ => -1
     }
     result

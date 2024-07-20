@@ -8,12 +8,10 @@ public class HelloWorldToString {
 
     public static void main(String[] args) {
         System.out.println("Holi Fiooooo");
-        System.out.println("Holi Diosi");
-        System.out.println("ya puedo printear cosas");
-        for(int i = 0; i < 6; i++){
-            if(i > 3){
-                dumbPrint();
-            }
+        int i = 0;
+        System.out.println(i);
+        for(; i < 6; i++){
+            dumbPrint();
         }
         dumbPrint();
     }
