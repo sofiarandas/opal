@@ -190,38 +190,23 @@ object ExprUtils {
     uvarToLVIndex
   }
 
-  // Map for variable indexing within methods
-  private val variableLvlIndexMapold: mutable.Map[Int, Int] = mutable.Map.empty
-  private var nextAvailableIndexold: Int = 1
-  // Reserve index 0 for level 0
-  //variableLvlIndexMap(0) = -1
-  // To handle unique levels for DVar with origin 0
-  //private var dVarZeroLevel: Int = 1
-
-  //ToDo: handle DVar und UVar better
-  //ToDo: in a way that I do handle them correctly
-  //ToDo:
+  // Method to get LVIndex for a variable
   def getVariableLvlIndex(variable: Var[_]): Int = {
-    val lvl = getVariableLvl(variable)
-    variableLvlIndexMapold.getOrElseUpdate(lvl, {
-        val newIndex = nextAvailableIndexold
-      nextAvailableIndexold += 1
-        newIndex
-      })
-  }
-
-  // Determine the level of a given variable
-  def getVariableLvl(variable: Var[_]): Int = {
-    val result = variable match {
-      case uVar: UVar[_] => if(uVar.definedBy.toList.head > 0) {
-        uVar.definedBy.toList.last
-      }else 0
-      case dVar : DVar[_] =>
-        // Use the origin for DVar, with special handling for origin 0
-        dVar.origin
-      case _ => -1
+    variable match {
+      case dVar: DVar[_] =>
+        val uVarDefSites = uvarToLVIndex.find { case (defSites, _) => defSites.contains(dVar.origin) }
+        uVarDefSites match {
+          case Some((_, index)) => index
+          case None => throw new NoSuchElementException(s"No LVIndex found for DVar with origin ${dVar.origin}")
+        }
+      case uVar: UVar[_] =>
+        val defSiteMatch = uvarToLVIndex.find { case (defSites, _) => defSites.exists(uVar.defSites.contains) }
+        defSiteMatch match {
+          case Some((_, index)) => index
+          case None => throw new NoSuchElementException(s"No LVIndex found for UVar with defSites ${uVar.defSites}")
+        }
+      case _ => throw new UnsupportedOperationException("Unsupported variable type")
     }
-    result
   }
 
   def loadVariable(variable: Var[_], instructionsWithPCs: ArrayBuffer[(Int, Instruction)], currentPC: Int): Int = {
