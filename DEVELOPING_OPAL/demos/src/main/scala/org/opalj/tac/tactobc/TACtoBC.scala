@@ -330,6 +330,12 @@ object TACtoBC {
         case Assignment(_, targetVar, expr) =>
           tacTargetToByteCodePcs += ((-1, currentPC))
           currentPC = StmtProcessor.processAssignment(targetVar, expr, generatedByteCodeWithPC, currentPC)
+        case ArrayStore(_, arrayRef, index, value) =>
+          tacTargetToByteCodePcs += ((-1, currentPC))
+          currentPC = StmtProcessor.processArrayStore(arrayRef, index, value, generatedByteCodeWithPC, currentPC)
+        case CaughtException(_, exceptionType, throwingStmts) =>
+          tacTargetToByteCodePcs += ((-1, currentPC))
+          currentPC = StmtProcessor.processCaughtException(exceptionType, throwingStmts, generatedByteCodeWithPC, currentPC)
         case ExprStmt(_, expr) =>
           tacTargetToByteCodePcs += ((-1, currentPC))
           currentPC = ExprUtils.processExpression(expr, generatedByteCodeWithPC, currentPC)
@@ -345,6 +351,9 @@ object TACtoBC {
           }
           tacTargetToByteCodePcs += ((defaultTarget, currentPC))
           currentPC = StmtProcessor.processSwitch(defaultTarget, index, npairs, generatedByteCodeWithPC, currentPC)
+        case JSR(_, target) =>
+          tacTargetToByteCodePcs += ((-1, currentPC))
+          currentPC = StmtProcessor.processJSR(target, generatedByteCodeWithPC, currentPC)
         case VirtualMethodCall(_, declaringClass, isInterface, name, descriptor, receiver, params) =>
           tacTargetToByteCodePcs += ((-1, currentPC))
           currentPC = StmtProcessor.processVirtualMethodCall(declaringClass, isInterface, name, descriptor, receiver, params, generatedByteCodeWithPC, currentPC)
@@ -357,6 +366,18 @@ object TACtoBC {
         case InvokedynamicMethodCall(_, bootstrapMethod, name, descriptor, params) =>
           tacTargetToByteCodePcs += ((-1, currentPC))
           currentPC = StmtProcessor.processInvokeDynamicMethodCall(bootstrapMethod, name, descriptor, params)
+        case MonitorEnter(_, objRef) =>
+          tacTargetToByteCodePcs += ((-1, currentPC))
+          currentPC = StmtProcessor.processMonitorEnter(objRef, generatedByteCodeWithPC, currentPC)
+        case MonitorExit(_, objRef) =>
+          tacTargetToByteCodePcs += ((-1, currentPC))
+          currentPC = StmtProcessor.processMonitorExit(objRef, generatedByteCodeWithPC, currentPC)
+        case PutField(_, declaringClass, name, declaredFieldType, objRef, value) =>
+          tacTargetToByteCodePcs += ((-1, currentPC))
+          currentPC = StmtProcessor.processPutField(declaringClass, name, declaredFieldType, objRef, value, generatedByteCodeWithPC, currentPC)
+        case PutStatic(_, declaringClass, name, declaredFieldType, value) =>
+          tacTargetToByteCodePcs += ((-1, currentPC))
+          currentPC = StmtProcessor.processPutStatic(declaringClass, name, declaredFieldType, value, generatedByteCodeWithPC, currentPC)
         case Checkcast(_, value, cmpTpe) =>
           tacTargetToByteCodePcs += ((-1, currentPC))
           currentPC = StmtProcessor.processCheckCast(value, cmpTpe, generatedByteCodeWithPC, currentPC)
@@ -369,6 +390,9 @@ object TACtoBC {
         case Return(_) =>
           tacTargetToByteCodePcs += ((-1, currentPC))
           currentPC = StmtProcessor.processReturn(generatedByteCodeWithPC, currentPC)
+        case Throw(_, exception) =>
+          tacTargetToByteCodePcs += ((-1, currentPC))
+          currentPC = StmtProcessor.processThrow(exception, generatedByteCodeWithPC, currentPC)
         case _ =>
       }
     }

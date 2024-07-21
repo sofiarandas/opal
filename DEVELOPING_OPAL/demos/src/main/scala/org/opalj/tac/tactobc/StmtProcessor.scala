@@ -3,9 +3,9 @@ package org.opalj.tac.tactobc
 
 import org.opalj.RelationalOperator
 import org.opalj.RelationalOperators._
-import org.opalj.br.{BootstrapMethod, ComputationalTypeDouble, ComputationalTypeFloat, ComputationalTypeInt, ComputationalTypeLong, ComputationalTypeReference, MethodDescriptor, ObjectType, PCs, ReferenceType}
-import org.opalj.br.instructions.{ARETURN, DRETURN, FRETURN, GOTO, IFNONNULL, IFNULL, IF_ICMPEQ, IF_ICMPGE, IF_ICMPGT, IF_ICMPLE, IF_ICMPLT, IF_ICMPNE, INVOKESPECIAL, INVOKESTATIC, INVOKEVIRTUAL, IRETURN, Instruction, LOOKUPSWITCH, LRETURN, RETURN, TABLESWITCH}
-import org.opalj.collection.immutable.IntIntPair
+import org.opalj.br.{BootstrapMethod, ComputationalTypeDouble, ComputationalTypeFloat, ComputationalTypeInt, ComputationalTypeLong, ComputationalTypeReference, FieldType, MethodDescriptor, ObjectType, PCs, ReferenceType}
+import org.opalj.br.instructions.{ARETURN, ATHROW, DRETURN, FRETURN, GOTO, IFNONNULL, IFNULL, IF_ICMPEQ, IF_ICMPGE, IF_ICMPGT, IF_ICMPLE, IF_ICMPLT, IF_ICMPNE, INVOKESPECIAL, INVOKESTATIC, INVOKEVIRTUAL, IRETURN, Instruction, JSR, LOOKUPSWITCH, LRETURN, MONITORENTER, MONITOREXIT, PUTFIELD, PUTSTATIC, RET, RETURN, TABLESWITCH}
+import org.opalj.collection.immutable.{IntIntPair, IntTrieSet}
 import org.opalj.tac.{Expr, UVar, Var}
 
 import scala.collection.immutable.ArraySeq
@@ -119,16 +119,72 @@ object StmtProcessor {
     currentAfterParamsPC + instruction.length
   }
 
+  def processArrayStore(arrayRef: Expr[_], index: Expr[_], value: Expr[_], instructionsWithPCs: ArrayBuffer[(Int, Instruction)], currentPC: Int): Int = {
+    //todo: handle this correctly
+    1
+  }
+
   def processInvokeDynamicMethodCall(bootstrapMethod: BootstrapMethod, name: String, descriptor: MethodDescriptor, params: Seq[Expr[_]]): Int = {
+    //todo: handle this correctly
     1
   }
 
   def processCheckCast(value: Expr[_], cmpTpe: ReferenceType, instructionsWithPCs: ArrayBuffer[(Int, Instruction)], currentPC: Int): Int = {
+    //todo: handle this correctly
     1
   }
 
   def processRet(returnAdresses: PCs, instructionsWithPCs: ArrayBuffer[(Int, Instruction)], currentPC: Int): Int = {
+    //todo: handle this correctly
+    val instruction = RET(returnAdresses.size)
+    instructionsWithPCs += ((currentPC, instruction))
+    currentPC + instruction.length
+  }
+
+  def processCaughtException(exceptionType: Option[ObjectType], throwingStmts: IntTrieSet, instructionsWithPCs: ArrayBuffer[(Int, Instruction)], currentPC: Int): Int = {
+    //todo: handle this correctly
     1
+  }
+
+  def processThrow(exception: Expr[_], instructionsWithPCs: ArrayBuffer[(Int, Instruction)], currentPC: Int): Int = {
+    //todo: handle this correctly
+    val instruction = ATHROW
+    instructionsWithPCs += ((currentPC, instruction))
+    currentPC + 1
+  }
+
+  def processPutStatic(declaringClass: ObjectType, name: String, declaredFieldType: FieldType, value: Expr[_], instructionsWithPCs: ArrayBuffer[(Int, Instruction)], currentPC: Int): Int = {
+    //todo: look what to do with the value :)
+    val instruction = PUTSTATIC(declaringClass, name, declaredFieldType)
+    instructionsWithPCs += ((currentPC, instruction))
+    currentPC + instruction.length
+  }
+
+  def processPutField(declaringClass: ObjectType, name: String, declaredFieldType: FieldType, objRef: Expr[_], value: Expr[_], instructionsWithPCs: ArrayBuffer[(Int, Instruction)], currentPC: Int): Int = {
+    //todo: look what to do with the value AND the objRef :)
+    val instruction = PUTFIELD(declaringClass, name, declaredFieldType)
+    instructionsWithPCs += ((currentPC, instruction))
+    currentPC + instruction.length
+  }
+
+  def processMonitorEnter(objRef: Expr[_], instructionsWithPCs: ArrayBuffer[(Int, Instruction)], currentPC: Int): Int = {
+    //todo: look what to do with the objRef :)
+    val instruction = MONITORENTER
+    instructionsWithPCs += ((currentPC, instruction))
+    currentPC + instruction.length
+  }
+  def processMonitorExit(objRef: Expr[_], instructionsWithPCs: ArrayBuffer[(Int, Instruction)], currentPC: Int): Int = {
+    //todo: look what to do with the objRef :)
+    val instruction = MONITOREXIT
+    instructionsWithPCs += ((currentPC, instruction))
+    currentPC + instruction.length
+  }
+
+  def processJSR(target: Int, instructionsWithPCs: ArrayBuffer[(Int, Instruction)], currentPC: Int): Int = {
+    //todo: look what to do with the target, how to get the length and if it is a jump instruction
+    val instruction = JSR
+    instructionsWithPCs += ((currentPC, instruction))
+    currentPC + 1
   }
 
   def processNonVirtualMethodCall(declaringClass: ObjectType, isInterface: Boolean, methodName: String, methodDescriptor: MethodDescriptor, receiver: Expr[_], params: Seq[Expr[_]], instructionsWithPCs: ArrayBuffer[(Int, Instruction)], currentPC: Int): Int = {
