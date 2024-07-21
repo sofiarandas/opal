@@ -309,6 +309,13 @@ object TACtoBC {
           for (param <- params) {
             ExprUtils.collectFromExpr(param, duVars)
           }
+        case NonVirtualMethodCall(_, _, _, _, _, receiver, params) =>
+          ExprUtils.collectFromExpr(receiver, duVars)
+          for (param <- params) {
+            ExprUtils.collectFromExpr(param, duVars)
+          }
+        case ReturnValue(_, expr) =>
+          ExprUtils.collectFromExpr(expr, duVars)
         case _ =>
       }
     }

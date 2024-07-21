@@ -4,7 +4,7 @@ package org.opalj.tac.tactobc
 import org.opalj.RelationalOperator
 import org.opalj.RelationalOperators._
 import org.opalj.br.{BootstrapMethod, ComputationalTypeDouble, ComputationalTypeFloat, ComputationalTypeInt, ComputationalTypeLong, ComputationalTypeReference, MethodDescriptor, ObjectType, PCs, ReferenceType}
-import org.opalj.br.instructions.{ALOAD_0, ARETURN, DRETURN, FRETURN, GOTO, IFNONNULL, IFNULL, IF_ICMPEQ, IF_ICMPGE, IF_ICMPGT, IF_ICMPLE, IF_ICMPLT, IF_ICMPNE, INVOKESPECIAL, INVOKESTATIC, INVOKEVIRTUAL, IRETURN, Instruction, LOOKUPSWITCH, LRETURN, RETURN, TABLESWITCH}
+import org.opalj.br.instructions.{ARETURN, DRETURN, FRETURN, GOTO, IFNONNULL, IFNULL, IF_ICMPEQ, IF_ICMPGE, IF_ICMPGT, IF_ICMPLE, IF_ICMPLT, IF_ICMPNE, INVOKESPECIAL, INVOKESTATIC, INVOKEVIRTUAL, IRETURN, Instruction, LOOKUPSWITCH, LRETURN, RETURN, TABLESWITCH}
 import org.opalj.collection.immutable.IntIntPair
 import org.opalj.tac.{Expr, UVar, Var}
 
@@ -132,11 +132,7 @@ object StmtProcessor {
   }
 
   def processNonVirtualMethodCall(declaringClass: ObjectType, isInterface: Boolean, methodName: String, methodDescriptor: MethodDescriptor, receiver: Expr[_], params: Seq[Expr[_]], instructionsWithPCs: ArrayBuffer[(Int, Instruction)], currentPC: Int): Int = {
-    //Todo: .this ALOAD_0 should also be part of the translation
-    // Process the receiver object (e.g., aload_0 for `this`)
-    instructionsWithPCs += ((currentPC, ALOAD_0))
-    val afterReceiverPC = currentPC + ALOAD_0.length
-    //val afterReceiverPC = ExprUtils.processExpression(receiver, instructionsWithPCs, currentPC)
+    val afterReceiverPC = ExprUtils.processExpression(receiver, instructionsWithPCs, currentPC)
 
     // Initialize the PC after processing the receiver
     var currentAfterParamsPC = afterReceiverPC

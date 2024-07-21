@@ -27,29 +27,6 @@ object ExprUtils {
         throw new UnsupportedOperationException("Unsupported expression type" + expr)
     }
   }
-/*
-  // Create empty disjoint sets
-  var disjointSets = DisjointSets[DUVar[_]]()
-
-  // Method to add DUVar to disjoint sets
-  def addToDisjointSets(duVar: DUVar[_]): Unit = {
-    duVar match {
-      case dVar: DVar[_] =>
-        // Add DVar origin to disjoint sets
-        disjointSets = disjointSets + dVar.origin
-        // Merge DVar with all use-site UVars
-        dVar.useSites.foreach { useSite =>
-          disjointSets = disjointSets + useSite
-          disjointSets = disjointSets.union(dVar.origin, useSite)._1
-        }
-      case uVar: UVar[_] =>
-        // Add UVar defSites to disjoint sets
-        uVar.defSites.foreach { defSite =>
-          disjointSets = disjointSets + defSite
-        }
-    }
-  }*/
-
 
   def collectFromExpr(expr: Expr[_], duVars: mutable.ListBuffer[DUVar[_]]): Unit = {
     expr match {
@@ -173,19 +150,23 @@ object ExprUtils {
   }
 
   def populateUvarToLVIndexMap(uVar: UVar[_]): mutable.Map[IntTrieSet, Int] = {
-    // Check if any existing key contains any of the def-sites
-    val existingEntry = uvarToLVIndex.find { case (key, _) => key.intersect(uVar.defSites).nonEmpty }
-
-    existingEntry match {
-      case Some((existingDefSites, index)) =>
-        // Merge the def-sites and update the map
-        val mergedDefSites = existingDefSites ++ uVar.defSites
-        uvarToLVIndex -= existingDefSites
-        uvarToLVIndex(mergedDefSites) = index
-      case None =>
-        // No overlapping def-sites found, add a new entry
-        uvarToLVIndex(uVar.defSites) = nextLVIndex
-        nextLVIndex += 1
+    // Special case: If the UVar has a def-site of -1, map it to LVIndex 0
+    if (uVar.defSites.contains(-1)) {
+      uvarToLVIndex(IntTrieSet(-1)) = 0
+    } else {
+      // Check if any existing key contains any of the def-sites
+      val existingEntry = uvarToLVIndex.find { case (key, _) => key.intersect(uVar.defSites).nonEmpty }
+      existingEntry match {
+        case Some((existingDefSites, index)) =>
+          // Merge the def-sites and update the map
+          val mergedDefSites = existingDefSites ++ uVar.defSites
+          uvarToLVIndex -= existingDefSites
+          uvarToLVIndex(mergedDefSites) = index
+        case None =>
+          // No overlapping def-sites found, add a new entry
+          uvarToLVIndex(uVar.defSites) = nextLVIndex
+          nextLVIndex += 1
+      }
     }
     uvarToLVIndex
   }
