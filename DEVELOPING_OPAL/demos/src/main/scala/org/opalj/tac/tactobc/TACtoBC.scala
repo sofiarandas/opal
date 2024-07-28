@@ -4,11 +4,11 @@ package org.opalj.tac.tactobc
 import org.opalj.ba.CodeAttributeBuilder.computeStackMapTable
 import org.opalj.ba.toDA
 import org.opalj.bc.Assembler
-import org.opalj.br.{ArrayType, Code, LocalVariable, LocalVariableTable, Method, ObjectType, StackMapTable}
+import org.opalj.br.{ArrayType, Code, CompactLineNumberTable, LocalVariable, LocalVariableTable, Method, ObjectType, StackMapTable}
 import org.opalj.br.analyses.Project
 import org.opalj.br.instructions.{GOTO, IF_ICMPEQ, IF_ICMPGE, IF_ICMPGT, IF_ICMPLE, IF_ICMPLT, IF_ICMPNE, Instruction, LOOKUPSWITCH, TABLESWITCH}
 import org.opalj.br.reader.Java8Framework
-import org.opalj.collection.immutable.IntIntPair
+import org.opalj.collection.immutable.{IntIntPair, IntTrieSet}
 import org.opalj.da.ClassFileReader.ClassFile
 import org.opalj.io.writeAndOpen
 import org.opalj.util.InMemoryClassLoader
@@ -108,10 +108,17 @@ object TACtoBC {
                 val newLocalVariableTable = LocalVariableTable(ArraySeq(
                   LocalVariable(0, maxPc + 1, "args", ArrayType(ObjectType("java/lang/String")), 0)
                 ))
+                /*val newCompactLineNumber = CompactLineNumber(
+                  Array(LineNumber(0, maxPc + 1))
+                )*/
                 //live variable
+
+                // Remove CompactLineNumberTable attribute
+                val newAttributes = attributesOfOriginalBody.filterNot(_.isInstanceOf[CompactLineNumberTable])
                 // Replace the LocalVariableTable attribute in the original attributes
-                val newAttributes = attributesOfOriginalBody.map {
+                val finalAttributes = newAttributes.map {
                   case _: LocalVariableTable => newLocalVariableTable
+                  //case _: CompactLineNumberTable =>
                   case other => other
                 }
 
@@ -121,7 +128,7 @@ object TACtoBC {
                   100,
                   newInstructionsWithNulls,
                   originalBody.exceptionHandlers,
-                  newAttributes)
+                  finalAttributes)
 
                 //todo: StackMapTable needs the localVariableTable to be able to be computed
                 println(s"New body for method ${m.name}: $newBody")
@@ -322,6 +329,8 @@ object TACtoBC {
     val resultDUVars = duVars
     println(resultDUVars)
     //ExprUtils.populateVariableLVIndexMap(duVars)
+    val parameters = ExprUtils.mapParametersAndPopulate(duVars)
+    println(parameters)
     val resultingLVIndexMap = ExprUtils.collectAllUVarsAndPopulate(duVars)
     println(resultingLVIndexMap)
     //first pass
@@ -461,6 +470,8 @@ object TACtoBC {
           tacTargetToByteCodePcsIndex += 1
         }
     }
+    ExprUtils.uvarToLVIndex = mutable.Map[IntTrieSet, Int]()
+    ExprUtils.nextLVIndex = 1
     result
   }
 

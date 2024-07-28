@@ -33,7 +33,15 @@ object ExprUtils {
       case duVar: DUVar[_] => duVars += duVar
       case binaryExpr: BinaryExpr[_] => collectFromBinaryExpr(binaryExpr, duVars)
       case virtualFunctionCallExpr: VirtualFunctionCall[_] => collectFromVirtualMethodCall(virtualFunctionCallExpr, duVars)
+      case staticFunctionCallExpr: StaticFunctionCall[_] => collectFromStaticFunctionCall(staticFunctionCallExpr, duVars)
       case _ =>
+    }
+  }
+
+  def collectFromStaticFunctionCall(staticFunctionCallExpr: StaticFunctionCall[_], duVars: mutable.ListBuffer[DUVar[_]]): Unit = {
+    // Process each parameter and collect from each
+    for (param <- staticFunctionCallExpr.params) {
+      collectFromExpr(param, duVars)
     }
   }
 
@@ -56,6 +64,13 @@ object ExprUtils {
   }
 
   def handleStaticFunctionCall(expr: StaticFunctionCall[_], instructionsWithPCs: ArrayBuffer[(Int, Instruction)], currentPC: Int): Int = {
+    // Initialize the PC after processing the receiver
+    var currentAfterParamsPC = currentPC
+
+    // Process each parameter and update the PC accordingly
+    for (param <- expr.params) {
+      currentAfterParamsPC = ExprUtils.processExpression(param, instructionsWithPCs, currentAfterParamsPC)
+    }
     val instruction = if (expr.isInterface) {
       INVOKEINTERFACE(expr.declaringClass, expr.name, expr.descriptor)
       throw new UnsupportedOperationException("Unsupported expression type" + expr)
@@ -63,8 +78,8 @@ object ExprUtils {
       INVOKESTATIC(expr.declaringClass, expr.isInterface, expr.name, expr.descriptor)
     }
 
-    instructionsWithPCs += ((currentPC, instruction))
-    currentPC + instruction.length
+    instructionsWithPCs += ((currentAfterParamsPC, instruction))
+    currentAfterParamsPC + instruction.length
   }
 
   def handleVirtualFunctionCall(expr: VirtualFunctionCall[_], instructionsWithPCs: ArrayBuffer[(Int, Instruction)], currentPC: Int): Int = {
@@ -139,36 +154,61 @@ object ExprUtils {
     currentPC + instruction.length // Update and return the new program counter
   }
 
-  val uvarToLVIndex = mutable.Map[IntTrieSet, Int]()
+  var uvarToLVIndex = mutable.Map[IntTrieSet, Int]()
   var nextLVIndex = 1
 
-  def collectAllUVarsAndPopulate(duVars: mutable.ListBuffer[DUVar[_]]): Unit = {
+  def collectAllUVarsAndPopulate(duVars: mutable.ListBuffer[DUVar[_]]): mutable.Map[IntTrieSet, Int] = {
     duVars.toArray.foreach {
-      case uVar : UVar[_] => populateUvarToLVIndexMap(uVar)
+      case uVar : UVar[_] => populateUvarAndDvarToLVIndexMap(uVar)
       case _ =>
     }
+    uvarToLVIndex
   }
 
-  def populateUvarToLVIndexMap(uVar: UVar[_]): mutable.Map[IntTrieSet, Int] = {
-    // Special case: If the UVar has a def-site of -1, map it to LVIndex 0
-    if (uVar.defSites.contains(-1)) {
-      uvarToLVIndex(IntTrieSet(-1)) = 0
-    } else {
-      // Check if any existing key contains any of the def-sites
-      val existingEntry = uvarToLVIndex.find { case (key, _) => key.intersect(uVar.defSites).nonEmpty }
-      existingEntry match {
-        case Some((existingDefSites, index)) =>
-          // Merge the def-sites and update the map
-          val mergedDefSites = existingDefSites ++ uVar.defSites
-          uvarToLVIndex -= existingDefSites
-          uvarToLVIndex(mergedDefSites) = index
-        case None =>
-          // No overlapping def-sites found, add a new entry
-          uvarToLVIndex(uVar.defSites) = nextLVIndex
-          nextLVIndex += 1
-      }
+  def mapParametersAndPopulate(duVars: mutable.ListBuffer[DUVar[_]]): mutable.Map[IntTrieSet, Int] = {
+    duVars.foreach {
+      case uVar: UVar[_] if uVar.defSites.exists(origin => origin < 0) =>
+        // Check if the defSites contain a parameter origin
+        uVar.defSites.foreach { origin =>
+          if (origin == -1) {
+            // Assign LV index 0 for 'this' only for instance methods
+            uvarToLVIndex.getOrElseUpdate(IntTrieSet(origin), 0)
+          } else if (origin < -1) {
+            if (origin == -2) {
+              // Assign LV index 0 for 'this' only for instance methods
+              uvarToLVIndex.getOrElseUpdate(IntTrieSet(origin), 0)
+            } else {
+              // Assign LV indexes for parameters
+              uvarToLVIndex.getOrElseUpdate(IntTrieSet(origin), {
+                val lvIndex = nextLVIndex
+                nextLVIndex += 1
+                lvIndex
+              })
+            }
+          }
+        }
+      case _ =>
     }
     uvarToLVIndex
+  }
+
+  def populateUvarAndDvarToLVIndexMap(uVar: UVar[_]): Unit = {
+    // Check if any existing key contains any of the def-sites
+    val existingEntry = uvarToLVIndex.find { case (key, _) => key.intersect(uVar.defSites).nonEmpty }
+    existingEntry match {
+      case Some((existingDefSites, index)) =>
+        // Merge the def-sites and update the map
+        val mergedDefSites = existingDefSites ++ uVar.defSites
+        uvarToLVIndex -= existingDefSites
+        uvarToLVIndex(mergedDefSites) = index
+      case None =>
+        // No overlapping def-sites found, add a new entry
+        uvarToLVIndex.getOrElseUpdate(uVar.defSites, {
+          val lvIndex = nextLVIndex
+          nextLVIndex += 1
+          lvIndex
+        })
+    }
   }
 
   // Method to get LVIndex for a variable
@@ -280,6 +320,10 @@ object ExprUtils {
       }
     instructionsWithPCs += ((currentPC, storeInstruction))
     currentPC + (if (index < 4) 1 else 2)
+  }
+
+  def handleArrayStore(variable: Var[_], instructionsWithPCs: ArrayBuffer[(Int, Instruction)], currentPC: Int): Int = {
+    1
   }
 
   private def handleFieldAccess(fieldExpr: Expr[_], instructionsWithPCs: ArrayBuffer[(Int, Instruction)], currentPC: Int): Int = {

@@ -4,7 +4,7 @@ package org.opalj.tac.tactobc
 import org.opalj.RelationalOperator
 import org.opalj.RelationalOperators._
 import org.opalj.br.{BootstrapMethod, ComputationalTypeDouble, ComputationalTypeFloat, ComputationalTypeInt, ComputationalTypeLong, ComputationalTypeReference, FieldType, MethodDescriptor, ObjectType, PCs, ReferenceType}
-import org.opalj.br.instructions.{ARETURN, ATHROW, DRETURN, FRETURN, GOTO, IFNONNULL, IFNULL, IF_ICMPEQ, IF_ICMPGE, IF_ICMPGT, IF_ICMPLE, IF_ICMPLT, IF_ICMPNE, INVOKESPECIAL, INVOKESTATIC, INVOKEVIRTUAL, IRETURN, Instruction, JSR, LOOKUPSWITCH, LRETURN, MONITORENTER, MONITOREXIT, PUTFIELD, PUTSTATIC, RET, RETURN, TABLESWITCH}
+import org.opalj.br.instructions.{ARETURN, ATHROW, DRETURN, FRETURN, GOTO, IFNONNULL, IFNULL, IF_ICMPEQ, IF_ICMPGE, IF_ICMPGT, IF_ICMPLE, IF_ICMPLT, IF_ICMPNE, INVOKESPECIAL, INVOKESTATIC, INVOKEVIRTUAL, IRETURN, Instruction, LOOKUPSWITCH, LRETURN, MONITORENTER, MONITOREXIT, PUTFIELD, PUTSTATIC, RET, RETURN, TABLESWITCH}
 import org.opalj.collection.immutable.{IntIntPair, IntTrieSet}
 import org.opalj.tac.{Expr, UVar, Var}
 
@@ -135,7 +135,7 @@ object StmtProcessor {
   }
 
   def processRet(returnAdresses: PCs, instructionsWithPCs: ArrayBuffer[(Int, Instruction)], currentPC: Int): Int = {
-    //todo: handle this correctly
+    //todo: handle returnAdresses this correctly
     val instruction = RET(returnAdresses.size)
     instructionsWithPCs += ((currentPC, instruction))
     currentPC + instruction.length
@@ -182,8 +182,8 @@ object StmtProcessor {
 
   def processJSR(target: Int, instructionsWithPCs: ArrayBuffer[(Int, Instruction)], currentPC: Int): Int = {
     //todo: look what to do with the target, how to get the length and if it is a jump instruction
-    val instruction = JSR
-    instructionsWithPCs += ((currentPC, instruction))
+    //val instruction = JSR
+    //instructionsWithPCs += ((currentPC, instruction))
     currentPC + 1
   }
 
